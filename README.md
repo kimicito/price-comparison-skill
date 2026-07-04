@@ -35,6 +35,7 @@ python3 scripts/runner_v2.py input.xlsx results.json
 
 ## Версии
 
+- **v5.2** — Excel Format v2: Вкладка 1 = все цены, Вкладка 2 = аналоги той же марки, Вкладка 3 = аналоги другой марки
 - **v5.1** — Cache + Category templates + Inline eval + Dual analogs + Red team
 - **v5.0** — Category templates + Inline eval + Dual analogs + Red team
 - **v4.1** — Price reduction focus
