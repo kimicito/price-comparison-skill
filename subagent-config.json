@@ -1,0 +1,14 @@
+{
+  "name": "Analog Spec Researcher",
+  "description": "Deep technical specification comparison for price-comparison skill. Research original and analog products, build detailed comparison matrix.",
+  "version": "1.0",
+  "input": {
+    "original": "string - full name of original product",
+    "analog": "string - full name of analog product",
+    "output_dir": "string - directory to save results"
+  },
+  "output": {
+    "file": "analog_matrix_[original]_[analog].json",
+    "format": "JSON with structured comparison matrix"
+  }
+}
