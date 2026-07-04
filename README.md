@@ -35,6 +35,7 @@ python3 scripts/runner_v2.py input.xlsx results.json
 
 ## Версии
 
+- **v5.1** — Cache + Category templates + Inline eval + Dual analogs + Red team
 - **v5.0** — Category templates + Inline eval + Dual analogs + Red team
 - **v4.1** — Price reduction focus
 - **v4.0** — Same-brand deviation analogs
