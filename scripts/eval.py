@@ -51,7 +51,14 @@ def is_numeric_price(value):
     if isinstance(value, (int, float)):
         return True
     # Пробуем распарсить строку
-    cleaned = str(value).strip().replace(" ", "").replace("₽", "").replace("$", "").replace(",", ".")
+    cleaned = str(value).strip().replace(" ", "").replace("₽", "").replace("$", "")
+    # Умная обработка запятых: если запятая между цифрами — разделитель тысяч, удаляем
+    # Если запятая перед 1-2 цифрами в конце — десятичный разделитель, заменяем на точку
+    import re
+    # Сначала обрабатываем десятичные запятые (пример: 106,5 → 106.5)
+    cleaned = re.sub(r'(\d),(\d{1,2})(?!\d)', r'\1.\2', cleaned)
+    # Оставшиеся запятые — разделители тысяч, удаляем
+    cleaned = cleaned.replace(",", "")
     try:
         float(cleaned)
         return True
@@ -65,7 +72,10 @@ def extract_price(value):
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    cleaned = str(value).strip().replace(" ", "").replace("₽", "").replace("$", "").replace(",", ".")
+    cleaned = str(value).strip().replace(" ", "").replace("₽", "").replace("$", "")
+    import re
+    cleaned = re.sub(r'(\d),(\d{1,2})(?!\d)', r'\1.\2', cleaned)
+    cleaned = cleaned.replace(",", "")
     try:
         return float(cleaned)
     except:

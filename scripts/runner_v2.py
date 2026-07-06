@@ -35,6 +35,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from datetime import datetime
 
+from inline_eval import inline_eval_all
+
 
 def create_main_sheet(wb, results):
     """Create the main results sheet with actual price data."""
@@ -137,6 +139,15 @@ def main():
         results = json.load(f)
     
     print(f"Loaded {len(results)} items from {results_file}")
+    
+    # Inline eval — проверка перед созданием Excel
+    print("\n🔍 Running inline eval...")
+    eval_result = inline_eval_all(results)
+    if not eval_result['passed']:
+        print("\n❌ Inline eval FAILED. Fix errors before proceeding.")
+        print(f"   Total errors: {eval_result['total_errors']}")
+        sys.exit(1)
+    print("✅ Inline eval passed\n")
     
     wb = openpyxl.Workbook()
     analogs_to_research = create_main_sheet(wb, results)
