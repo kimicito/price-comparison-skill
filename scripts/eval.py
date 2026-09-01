@@ -232,6 +232,34 @@ def eval_price_comparison(filepath, input_filepath=None):
             if original_brand and analog_brand and original_brand == analog_brand:
                 errors.append(f"FAIL [{sku}]: Аналог той же марки ({analog_brand}). Должен быть другой производитель.")
         
+        # FAIL 7: Подозрительные паттерны галлюцинаций цен
+        if has_price_1 and has_price_2:
+            p1 = extract_price(price_1)
+            p2 = extract_price(price_2)
+            if p1 and p2 and p1 > 0 and p2 > 0:
+                ratio = max(p1, p2) / min(p1, p2)
+                # Цены отличаются в >10x — вероятная галлюцинация
+                if ratio > 10:
+                    errors.append(f"FAIL [{sku}]: Цены оригинала отличаются в {ratio:.1f}x ({p1:,.0f} vs {p2:,.0f}). Вероятна галлюцинация — проверьте артикул.")
+        
+        # FAIL 8: Возможно разные единицы измерения
+        if has_price_1 and has_price_2:
+            p1 = extract_price(price_1)
+            p2 = extract_price(price_2)
+            if p1 and p2:
+                # Цена 1 > 100k, Цена 2 < 10k — возможно, упаковка vs штука
+                if p1 > 100000 and p2 < 10000 and p1 / p2 > 10:
+                    errors.append(f"FAIL [{sku}]: Цена 1 ({p1:,.0f} ₽) в {p1/p2:.0f}x больше Цены 2 ({p2:,.0f} ₽). Возможно, разные единицы измерения (шт vs упаковка/метр).")
+        
+        # FAIL 9: Несоответствие рекомендации и цены аналога
+        if comment and has_analog and has_price_1 and analog_price:
+            comment_lower = str(comment).lower()
+            p1 = extract_price(price_1)
+            pa = extract_price(analog_price)
+            if p1 and pa and pa > p1 * 1.1:  # Аналог дороже на >10%
+                if 'согласовать' in comment_lower and not any(word in comment_lower for word in ['лучше', 'премиум', 'надёжн', 'качеств', 'причина', 'дороже']):
+                    errors.append(f"FAIL [{sku}]: Рекомендация 'Согласовать', но аналог дороже оригинала ({pa:,.0f} > {p1:,.0f}) без объяснения причины.")
+        
         # ==================== WARN CHECKS ====================
         
         # WARN 1: Цена аналога > оригинала → нужно объяснение
@@ -281,6 +309,65 @@ def eval_price_comparison(filepath, input_filepath=None):
         # WARN 6: Есть аналог, но нет URL аналога
         if has_analog and analog_price is not None and not is_clickable_url(analog_url):
             warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({analog_url}).")
+        
+        # WARN 7: URL ведёт на поиск или главную страницу (не на конкретный товар)
+        if has_price_1 and url_1:
+            url_str = str(url_1).lower()
+            search_patterns = ['/search', '?q=', 'query=', '/catalog/', '/category/', '/products/']
+            if any(p in url_str for p in search_patterns) or url_str.rstrip('/').endswith('.ru') or url_str.rstrip('/').endswith('.com'):
+                warnings.append(f"WARN [{sku}]: URL поставщика 1 ведёт на поиск/главную, не на конкретный товар ({url_1})")
+        
+        if has_price_2 and url_2:
+            url_str = str(url_2).lower()
+            if any(p in url_str for p in search_patterns) or url_str.rstrip('/').endswith('.ru') or url_str.rstrip('/').endswith('.com'):
+                warnings.append(f"WARN [{sku}]: URL поставщика 2 ведёт на поиск/главную, не на конкретный товар ({url_2})")
+        
+        # WARN 8: Подозрительно низкая цена — возможно, за метр/кг/упаковку
+        if has_price_1:
+            p1 = extract_price(price_1)
+            if p1 and p1 < 10:
+                warnings.append(f"WARN [{sku}]: Подозрительно низкая цена ({p1:,.0f} ₽). Проверьте единицу измерения (возможно, цена за метр/кг, а не за штуку).")
+        
+        # WARN 9: Подозрительно высокая цена
+        if has_price_1:
+            p1 = extract_price(price_1)
+            if p1 and p1 > 10_000_000:
+                warnings.append(f"WARN [{sku}]: Подозрительно высокая цена ({p1:,.0f} ₽). Проверьте единицу измерения (возможно, цена за партию/проект).")
+    
+    # ==================== ПРОВЕРКА ДАТЫ ПОИСКА ====================
+    # WARN: Дата поиска устарела (>7 дней)
+    # Проверяем колонку с датой если она есть
+    col_date = find_col("дата", "date")
+    if col_date:
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=7)
+        for row in ws.iter_rows(min_row=2, values_only=False):
+            date_cell = row[col_date - 1] if col_date <= len(row) else None
+            if date_cell and date_cell.value:
+                try:
+                    date_val = date_cell.value
+                    if isinstance(date_val, str):
+                        # Пробуем распарсить строку даты
+                        for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y']:
+                            try:
+                                date_val = datetime.strptime(date_val.strip(), fmt)
+                                break
+                            except:
+                                continue
+                    if isinstance(date_val, datetime) and date_val < cutoff_date:
+                        sku_date = row[col_sku - 1].value if col_sku else ""
+                        warnings.append(f"WARN [{sku_date}]: Дата поиска ({date_val.strftime('%Y-%m-%d')}) устарела (>7 дней). Цена может быть неактуальной.")
+                except:
+                    pass
+    # ==================== ПРОВЕРКА КАЧЕСТВА ПОКРЫТИЯ ====================
+    if stats['total'] > 0:
+        coverage_2prices = stats['with_price_2'] / stats['total'] * 100
+        if coverage_2prices < 50:
+            warnings.append(f"WARN: Только {coverage_2prices:.0f}% позиций имеют 2 цены оригинала. Цель: >80% для надёжного сравнения.")
+        
+        coverage_analog = stats['with_analog'] / stats['total'] * 100
+        if coverage_analog < 30 and stats['total'] >= 5:
+            warnings.append(f"WARN: Только {coverage_analog:.0f}% позиций имеют аналоги. Возможно, недостаточно глубокий поиск.")
     
     # ==================== ПРОВЕРКА МАТРИЦ ====================
     matrix_sheets = [s for s in wb.sheetnames if s.startswith("Матрица") or s in ["Аналоги другой марки", "Аналоги той же марки"]]
