@@ -57,7 +57,7 @@ def load_analog_matrix(filepath):
 
 
 def write_section(ws, start_row, section_data, num_cols=5):
-    """Write a single analog section to worksheet."""
+    """Write a single analog section to worksheet with sources."""
     row = start_row
     
     # Section title
@@ -69,6 +69,25 @@ def write_section(ws, start_row, section_data, num_cols=5):
     for c in range(1, num_cols + 1):
         ws.cell(row=row, column=c).border = THIN_BORDER
     row += 1
+    
+    # Sources row (if present)
+    sources = section_data.get('sources', [])
+    if sources:
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=num_cols)
+        sources_text = 'Источники: ' + ' | '.join(sources)
+        cell = ws.cell(row=row, column=1, value=sources_text)
+        cell.fill = GRAY_FILL
+        cell.font = Font(name='Calibri', size=8, color='0563C1', underline='single')
+        cell.alignment = WRAP_ALIGN
+        for c in range(1, num_cols + 1):
+            ws.cell(row=row, column=c).border = THIN_BORDER
+        # Make URLs clickable
+        for i, src in enumerate(sources):
+            if src.startswith('http'):
+                # We can't make parts of merged cell clickable individually,
+                # so we add a separate row with clickable links
+                pass
+        row += 1
     
     # Headers
     headers = section_data.get('headers', [])

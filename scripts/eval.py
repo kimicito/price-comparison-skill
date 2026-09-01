@@ -283,7 +283,7 @@ def eval_price_comparison(filepath, input_filepath=None):
             warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({analog_url}).")
     
     # ==================== ПРОВЕРКА МАТРИЦ ====================
-    matrix_sheets = [s for s in wb.sheetnames if s.startswith("Матрица")]
+    matrix_sheets = [s for s in wb.sheetnames if s.startswith("Матрица") or s in ["Аналоги другой марки", "Аналоги той же марки"]]
     
     # WARN 7: Если есть аналоги, но нет матриц
     if stats["with_analog"] > 0 and len(matrix_sheets) == 0:
@@ -312,6 +312,59 @@ def eval_price_comparison(filepath, input_filepath=None):
                         break
             if not found_risk_comment:
                 warnings.append(f"WARN [{sheet_name}]: В матрице есть критичные отличия (🔴), но в комментариях нет упоминания рисков.")
+    
+    # FAIL 9: Проверка наличия ссылок на источники спецификаций в матрицах
+    for sheet_name in matrix_sheets:
+        ws_matrix = wb[sheet_name]
+        has_sources = False
+        for row in ws_matrix.iter_rows(min_row=1, max_row=3, values_only=True):
+            for cell in row:
+                if cell and isinstance(cell, str) and ('источник' in cell.lower() or 'http' in cell.lower() or 'datasheet' in cell.lower() or 'spec' in cell.lower()):
+                    has_sources = True
+                    break
+            if has_sources:
+                break
+        
+        if not has_sources:
+            # Проверим, есть ли хотя бы URL в ячейках
+            has_urls = False
+            for row in ws_matrix.iter_rows(min_row=1, values_only=False):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str) and cell.value.startswith('http'):
+                        has_urls = True
+                        break
+                if has_urls:
+                    break
+            
+            if not has_urls:
+                errors.append(f"FAIL [{sheet_name}]: Нет ссылок на источники спецификаций (datasheets, сайты производителей). Каждая матрица аналога должна содержать ссылки для проверки совместимости.")
+        else:
+            # Проверим, что ссылки кликабельные
+            clickable_sources = 0
+            for row in ws_matrix.iter_rows(min_row=1, max_row=5, values_only=False):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str) and 'http' in str(cell.value):
+                        # Check if cell has hyperlink
+                        if cell.hyperlink:
+                            clickable_sources += 1
+            
+            if clickable_sources == 0:
+                warnings.append(f"WARN [{sheet_name}]: Ссылки на источники найдены, но не кликабельны. Добавьте гиперссылки для удобства проверки.")
+    
+    # WARN 10: Проверка структуры матриц (наличие колонок Параметр/Оригинал/Аналог)
+    for sheet_name in matrix_sheets:
+        ws_matrix = wb[sheet_name]
+        headers_found = []
+        for col_idx, cell in enumerate(ws_matrix[3] if ws_matrix.max_row >= 3 else ws_matrix[1], start=1):
+            if cell.value:
+                headers_found.append(str(cell.value).lower())
+        
+        has_param = any('параметр' in h for h in headers_found)
+        has_original = any('оригинал' in h for h in headers_found)
+        has_analog = any('аналог' in h for h in headers_found)
+        
+        if not (has_param and has_original and has_analog):
+            errors.append(f"FAIL [{sheet_name}]: Матрица неполная. Должны быть колонки: Параметр, Оригинал, Аналог. Найдено: {headers_found}")
     
     return ("FAIL" if errors else "WARN" if warnings else "PASS"), errors, warnings, stats
 
