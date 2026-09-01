@@ -103,18 +103,37 @@ def check_suppliers_different(supplier1, supplier2):
     return True, None
 
 
+def check_alternative_same_brand(original_name, alternative_name, brand=None):
+    """Проверка, что альтернатива — та же марка, другая модель.
+    
+    Returns: (ok, error_msg, is_correct_brand)
+    """
+    if not original_name or not alternative_name:
+        return True, None, False
+    
+    original_brand = str(original_name).split()[0].lower()
+    alternative_brand = str(alternative_name).split()[0].lower()
+    
+    is_same = original_brand == alternative_brand
+    
+    if not is_same:
+        return True, f"Альтернатива другой марки ({alternative_brand}) — это аналог (п.2), не альтернатива (п.3)", False
+    
+    return True, None, True
+
+
 def inline_eval_item(item):
-    """Полная inline-проверка одной позиции.
+    """Полная inline-проверка одной позиции (2+1+1).
     
     Args:
-        item: dict с полями price1, price2, analog_price, url1, url2, analog_url, etc.
+        item: dict с полями price1, price2, analog_price, alternative_price, url1, url2, analog_url, alternative_url, etc.
     
     Returns: (errors, warnings)
     """
     errors = []
     warnings = []
     
-    # Проверка цен
+    # Проверка цен оригинала
     for field in ['price1', 'price2']:
         price = item.get(field)
         if price is not None:
@@ -124,7 +143,7 @@ def inline_eval_item(item):
             elif msg:
                 warnings.append(f"{field}: {msg}")
     
-    # Проверка аналога
+    # Проверка аналога (п.2 — другая марка)
     analog_price = item.get('analog_price')
     if analog_price:
         ok, msg = check_price_sanity(analog_price, item.get('price1'))
@@ -133,20 +152,41 @@ def inline_eval_item(item):
         elif msg:
             warnings.append(f"analog_price: {msg}")
     
+    # Проверка альтернативы (п.3 — та же марка)
+    alternative_price = item.get('alternative_price')
+    if alternative_price:
+        ok, msg = check_price_sanity(alternative_price, item.get('price1'))
+        if not ok:
+            errors.append(f"alternative_price: {msg}")
+        elif msg:
+            warnings.append(f"alternative_price: {msg}")
+    
     # Проверка URL
-    for field in ['url1', 'url2', 'analog_url']:
+    for field in ['url1', 'url2', 'analog_url', 'alternative_url']:
         url = item.get(field)
         ok, msg = check_url_valid(url)
         if not ok:
             errors.append(f"{field}: {msg}")
     
-    # Проверка бренда аналога
+    # Проверка бренда аналога (п.2 — должна быть другая марка)
     ok, msg, is_same = check_analog_brand(item.get('name'), item.get('analog'))
     if msg:
         if is_same:
-            warnings.append(f"Аналог: {msg}")
+            warnings.append(f"Аналог (п.2): {msg} — переклассифицировать как альтернативу (п.3)")
         else:
-            warnings.append(f"Аналог: {msg}")
+            warnings.append(f"Аналог (п.2): {msg}")
+    
+    # Проверка бренда альтернативы (п.3 — должна быть та же марка)
+    ok, msg, is_correct = check_alternative_same_brand(
+        item.get('name'), 
+        item.get('alternative_same_brand'),
+        item.get('brand')
+    )
+    if msg:
+        if not is_correct:
+            warnings.append(f"Альтернатива (п.3): {msg}")
+        else:
+            warnings.append(f"Альтернатива (п.3): {msg}")
     
     # Проверка поставщиков
     ok, msg = check_suppliers_different(item.get('supplier1'), item.get('supplier2'))

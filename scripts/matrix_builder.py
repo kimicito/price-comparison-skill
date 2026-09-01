@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Matrix Builder — Combines main results + sub-agent research into final Excel.
+Matrix Builder v6.1 — Combines main results + sub-agent research into final Excel.
 
 Usage:
-    python3 matrix_builder.py main_results.xlsx analogs_dir/ output.xlsx
+    python3 matrix_builder.py main_results.xlsx analogs_dir/ alternatives_dir/ output.xlsx
 
 Where analogs_dir/ contains JSON files from sub-agents:
     analog_matrix_[original]_[analog].json
+    
+And alternatives_dir/ contains:
+    alternative_matrix_[original]_[alternative].json
 """
 
 import sys
@@ -24,18 +27,21 @@ def load_main_results(filepath):
     return wb
 
 
-def load_analog_matrix(filepath):
-    """Load a single analog comparison matrix from JSON."""
+def load_matrix_json(filepath):
+    """Load a single comparison matrix from JSON."""
     with open(filepath, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-def create_matrix_sheet(wb, original_name, analog_name, matrix_data):
-    """Create a comparison matrix sheet for a specific analog."""
-    # Извлекаем бренды (первое слово) из названий
+def create_matrix_sheet(wb, original_name, compare_name, matrix_data, sheet_type='analog'):
+    """Create a comparison matrix sheet for analog or alternative."""
     original_brand = original_name.split()[0] if original_name else "Оригинал"
-    analog_brand = analog_name.split()[0] if analog_name else "Аналог"
-    sheet_name = f"Матрица {original_brand} vs {analog_brand}"
+    compare_brand = compare_name.split()[0] if compare_name else "Сравнение"
+    
+    if sheet_type == 'alternative':
+        sheet_name = f"Матрица Альтернатива {compare_brand}"
+    else:
+        sheet_name = f"Матрица Аналог {compare_brand}"
     
     # Ensure unique sheet name (Excel limit 31 chars)
     base_name = sheet_name[:27]
@@ -71,12 +77,12 @@ def create_matrix_sheet(wb, original_name, analog_name, matrix_data):
     subtitle.alignment = Alignment(horizontal='left')
     
     ws.merge_cells('A3:E3')
-    subtitle2 = ws.cell(row=3, column=1, value=f'Аналог:   {analog_name}')
+    subtitle2 = ws.cell(row=3, column=1, value=f'{"Альтернатива" if sheet_type == "alternative" else "Аналог"}:   {compare_name}')
     subtitle2.font = Font(bold=True, size=11, color='C65911')
     subtitle2.alignment = Alignment(horizontal='left')
     
     # Headers
-    headers = ['Категория', 'Параметр', 'Оригинал', 'Аналог', 'Статус']
+    headers = ['Категория', 'Параметр', 'Оригинал', 'Аналог' if sheet_type == 'analog' else 'Альтернатива', 'Статус']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col, value=header)
         cell.fill = header_fill
@@ -110,10 +116,10 @@ def create_matrix_sheet(wb, original_name, analog_name, matrix_data):
         # Parameters in this category
         for item in items:
             row = [
-                '',  # Category (already shown above)
+                '',
                 item.get('parameter', ''),
                 item.get('original', ''),
-                item.get('analog', ''),
+                item.get('analog', item.get('alternative', '')),
                 item.get('status', '')
             ]
             for col, value in enumerate(row, 1):
@@ -128,7 +134,7 @@ def create_matrix_sheet(wb, original_name, analog_name, matrix_data):
                         cell.fill = match_fill
                     elif '🔴' in status_str or '❌' in status_str or 'Критично' in status_str:
                         cell.fill = mismatch_fill
-                    elif '⚠️' in status_str or 'Частично' in status_str:
+                    elif '🟡' in status_str or 'Частично' in status_str or 'Некритично' in status_str:
                         cell.fill = warning_fill
                     else:
                         cell.fill = neutral_fill
@@ -156,49 +162,50 @@ def create_matrix_sheet(wb, original_name, analog_name, matrix_data):
     # Count statuses
     statuses = [item.get('status', '') for item in matrix_data]
     match_count = sum(1 for s in statuses if '✅' in s)
-    warning_count = sum(1 for s in statuses if '⚠️' in s)
+    warning_count = sum(1 for s in statuses if '🟡' in s or '⚠️' in s)
     mismatch_count = sum(1 for s in statuses if '🔴' in s or '❌' in s)
     
     summary_row += 1
     ws.merge_cells(f'A{summary_row}:E{summary_row}')
     verdict = ws.cell(row=summary_row, column=1, 
-                     value=f'Совпадений: {match_count} | Частичных совпадений: {warning_count} | Критичных отличий: {mismatch_count}')
+                     value=f'Совпадений: {match_count} | Некритичных отличий: {warning_count} | Критичных отличий: {mismatch_count}')
     verdict.font = Font(size=11)
     
     return ws
 
 
-def add_summary_sheet(wb, all_analogs):
-    """Add a summary sheet with all analogs overview."""
-    ws = wb.create_sheet(title='Сводка аналогов', index=0)
+def add_summary_sheet(wb, all_items):
+    """Add a summary sheet with all analogs and alternatives overview."""
+    ws = wb.create_sheet(title='Сводка', index=0)
     
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(color='FFFFFF', bold=True, size=11)
     border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                     top=Side(style='thin'), bottom=Side(style='thin'))
     
-    headers = ['Оригинал', 'Аналог', 'Цена оригинала', 'Цена аналога', 'Экономия', 'Рекомендация']
+    headers = ['Оригинал', 'Сравнение', 'Тип', 'Цена оригинала', 'Цена сравнения', 'Экономия', 'Рекомендация']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
         cell.font = header_font
         cell.border = border
     
-    for row_idx, analog in enumerate(all_analogs, 2):
+    for row_idx, item in enumerate(all_items, 2):
         row_data = [
-            analog.get('original', ''),
-            analog.get('analog', ''),
-            analog.get('original_price', ''),
-            analog.get('analog_price', ''),
-            analog.get('savings', ''),
-            analog.get('recommendation', '')
+            item.get('original', ''),
+            item.get('compare', ''),
+            item.get('type', ''),
+            item.get('original_price', ''),
+            item.get('compare_price', ''),
+            item.get('savings', ''),
+            item.get('recommendation', '')
         ]
         for col, value in enumerate(row_data, 1):
             cell = ws.cell(row=row_idx, column=col, value=value)
             cell.border = border
             cell.alignment = Alignment(vertical='top', wrap_text=True)
     
-    for col in ['A', 'B', 'C', 'D', 'E', 'F']:
+    for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
         ws.column_dimensions[col].width = 25
     
     ws.freeze_panes = 'A2'
@@ -206,48 +213,76 @@ def add_summary_sheet(wb, all_analogs):
 
 
 def main():
-    if len(sys.argv) < 4:
-        print("Usage: python3 matrix_builder.py main_results.xlsx analogs_dir/ output.xlsx")
+    if len(sys.argv) < 5:
+        print("Usage: python3 matrix_builder.py main_results.xlsx analogs_dir/ alternatives_dir/ output.xlsx")
+        print("   or: python3 matrix_builder.py main_results.xlsx analogs_dir/ - output.xlsx  (no alternatives)")
         sys.exit(1)
     
     main_file = sys.argv[1]
     analogs_dir = sys.argv[2]
-    output_file = sys.argv[3]
+    alternatives_dir = sys.argv[3]
+    output_file = sys.argv[4]
     
     # Load main results
     wb = load_main_results(main_file)
     
-    # Find all analog matrix files
-    pattern = os.path.join(analogs_dir, 'analog_matrix_*.json')
-    matrix_files = glob.glob(pattern)
+    all_items_summary = []
     
-    print(f"Found {len(matrix_files)} analog matrix files")
-    
-    all_analogs_summary = []
-    
-    for matrix_file in matrix_files:
-        data = load_analog_matrix(matrix_file)
-        original = data.get('original', 'Unknown')
-        analog = data.get('analog', 'Unknown')
-        matrix = data.get('matrix', [])
+    # Process analogs (п.2)
+    if analogs_dir != '-':
+        pattern = os.path.join(analogs_dir, 'analog_matrix_*.json')
+        matrix_files = glob.glob(pattern)
+        print(f"Found {len(matrix_files)} analog matrix files")
         
-        if matrix:
-            create_matrix_sheet(wb, original, analog, matrix)
-            print(f"Added matrix sheet for: {original} vs {analog}")
-        
-        # Add to summary
-        all_analogs_summary.append({
-            'original': original,
-            'analog': analog,
-            'original_price': data.get('original_price', ''),
-            'analog_price': data.get('analog_price', ''),
-            'savings': data.get('savings', ''),
-            'recommendation': data.get('recommendation', '')
-        })
+        for matrix_file in matrix_files:
+            data = load_matrix_json(matrix_file)
+            original = data.get('original', 'Unknown')
+            analog = data.get('analog', 'Unknown')
+            matrix = data.get('matrix', [])
+            
+            if matrix:
+                create_matrix_sheet(wb, original, analog, matrix, sheet_type='analog')
+                print(f"Added analog matrix: {original} vs {analog}")
+            
+            all_items_summary.append({
+                'original': original,
+                'compare': analog,
+                'type': 'Аналог (другая марка)',
+                'original_price': data.get('original_price', ''),
+                'compare_price': data.get('analog_price', ''),
+                'savings': data.get('savings', ''),
+                'recommendation': data.get('recommendation', '')
+            })
     
-    # Add summary sheet if we have analogs
-    if all_analogs_summary:
-        add_summary_sheet(wb, all_analogs_summary)
+    # Process alternatives (п.3)
+    if alternatives_dir != '-':
+        pattern = os.path.join(alternatives_dir, 'alternative_matrix_*.json')
+        matrix_files = glob.glob(pattern)
+        print(f"Found {len(matrix_files)} alternative matrix files")
+        
+        for matrix_file in matrix_files:
+            data = load_matrix_json(matrix_file)
+            original = data.get('original', 'Unknown')
+            alternative = data.get('alternative', 'Unknown')
+            matrix = data.get('matrix', [])
+            
+            if matrix:
+                create_matrix_sheet(wb, original, alternative, matrix, sheet_type='alternative')
+                print(f"Added alternative matrix: {original} vs {alternative}")
+            
+            all_items_summary.append({
+                'original': original,
+                'compare': alternative,
+                'type': 'Альтернатива (та же марка)',
+                'original_price': data.get('original_price', ''),
+                'compare_price': data.get('alternative_price', ''),
+                'savings': data.get('savings', ''),
+                'recommendation': data.get('recommendation', '')
+            })
+    
+    # Add summary sheet if we have items
+    if all_items_summary:
+        add_summary_sheet(wb, all_items_summary)
     
     # Save final workbook
     wb.save(output_file)

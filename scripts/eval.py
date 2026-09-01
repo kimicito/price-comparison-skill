@@ -96,6 +96,8 @@ def eval_price_comparison(filepath, input_filepath=None):
         "missing_any_price": 0,
         "with_analog": 0,
         "analog_not_found": 0,
+        "with_alternative": 0,
+        "alternative_not_found": 0,
         "missing_comment": 0,
     }
     
@@ -128,6 +130,10 @@ def eval_price_comparison(filepath, input_filepath=None):
     col_analog_price = find_col("цена аналога")
     col_analog_url = find_col("url аналога", "сайт аналога")
     col_analog_supplier = find_col("поставщик аналога")
+    col_alternative = find_col("альтернатива", "та же марка")
+    col_alternative_price = find_col("цена альтернативы")
+    col_alternative_url = find_col("url альтернативы", "ссылка альтернативы")
+    col_alternative_supplier = find_col("поставщик альтернативы")
     col_comment = find_col("комментарий")
     
     # Проверка наличия обязательных колонок
@@ -171,11 +177,15 @@ def eval_price_comparison(filepath, input_filepath=None):
         analog = row[col_analog - 1].value if col_analog else None
         analog_price = row[col_analog_price - 1].value if col_analog_price else None
         analog_url = row[col_analog_url - 1].value if col_analog_url else None
+        alternative = row[col_alternative - 1].value if col_alternative else None
+        alternative_price = row[col_alternative_price - 1].value if col_alternative_price else None
+        alternative_url = row[col_alternative_url - 1].value if col_alternative_url else None
         comment = row[col_comment - 1].value if col_comment else None
         
         has_price_1 = price_1 is not None and str(price_1).strip() != ""
         has_price_2 = price_2 is not None and str(price_2).strip() != ""
         has_analog = analog is not None and str(analog).strip() not in ["", "-", "Аналог не найден", "Нет прямого аналога"]
+        has_alternative = alternative is not None and str(alternative).strip() not in ["", "-", "Альтернатива не найдена", "Не найдена"]
         
         if has_price_1:
             stats["with_price_1"] += 1
@@ -185,6 +195,10 @@ def eval_price_comparison(filepath, input_filepath=None):
             stats["with_analog"] += 1
         if analog and "не найден" in str(analog).lower():
             stats["analog_not_found"] += 1
+        if has_alternative:
+            stats["with_alternative"] += 1
+        if alternative and "не найден" in str(alternative).lower():
+            stats["alternative_not_found"] += 1
         
         # ==================== FAIL CHECKS ====================
         
@@ -206,6 +220,8 @@ def eval_price_comparison(filepath, input_filepath=None):
             errors.append(f"FAIL [{sku}]: Цена 2 не является числом ({price_2}). Должна быть числовая ячейка.")
         if has_analog and analog_price is not None and str(analog_price).strip() != "" and not is_numeric_price(analog_price):
             errors.append(f"FAIL [{sku}]: Цена аналога не является числом ({analog_price}).")
+        if has_alternative and alternative_price is not None and str(alternative_price).strip() != "" and not is_numeric_price(alternative_price):
+            errors.append(f"FAIL [{sku}]: Цена альтернативы не является числом ({alternative_price}).")
         
         # FAIL 4: URL кликабельны
         if has_price_1 and not is_clickable_url(url_1):
@@ -230,7 +246,14 @@ def eval_price_comparison(filepath, input_filepath=None):
             original_brand = str(sku).split()[0].lower() if sku else ""
             analog_brand = str(analog).split()[0].lower() if analog else ""
             if original_brand and analog_brand and original_brand == analog_brand:
-                errors.append(f"FAIL [{sku}]: Аналог той же марки ({analog_brand}). Должен быть другой производитель.")
+                errors.append(f"FAIL [{sku}]: Аналог (п.2) той же марки ({analog_brand}). Должен быть другой производитель. Переклассифицируйте как альтернативу (п.3).")
+        
+        # FAIL 7: Альтернатива — та же марка
+        if has_alternative and sku:
+            original_brand = str(sku).split()[0].lower() if sku else ""
+            alternative_brand = str(alternative).split()[0].lower() if alternative else ""
+            if original_brand and alternative_brand and original_brand != alternative_brand:
+                errors.append(f"FAIL [{sku}]: Альтернатива (п.3) другой марки ({alternative_brand}). Должна быть та же марка. Переклассифицируйте как аналог (п.2).")
         
         # ==================== WARN CHECKS ====================
         
@@ -281,15 +304,28 @@ def eval_price_comparison(filepath, input_filepath=None):
         # WARN 6: Есть аналог, но нет URL аналога
         if has_analog and analog_price is not None and not is_clickable_url(analog_url):
             warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({analog_url}).")
+        
+        # WARN 7: Есть альтернатива, но нет URL альтернативы
+        if has_alternative and alternative_price is not None and not is_clickable_url(alternative_url):
+            warnings.append(f"WARN [{sku}]: У альтернативы нет кликабельного URL ({alternative_url}).")
+        
+        # WARN 8: Цена альтернативы > оригинала
+        if has_alternative and has_price_1:
+            p1 = extract_price(price_1)
+            pa = extract_price(alternative_price)
+            if p1 and pa and pa >= p1:
+                if comment and ("дороже" not in str(comment).lower() and "лучше" not in str(comment).lower()):
+                    warnings.append(f"WARN [{sku}]: Альтернатива дороже оригинала ({pa:,.0f} ≥ {p1:,.0f}), но в комментарии нет объяснения.")
     
     # ==================== ПРОВЕРКА МАТРИЦ ====================
     matrix_sheets = [s for s in wb.sheetnames if s.startswith("Матрица")]
     
-    # WARN 7: Если есть аналоги, но нет матриц
-    if stats["with_analog"] > 0 and len(matrix_sheets) == 0:
-        warnings.append(f"WARN: Найдено {stats['with_analog']} аналогов, но нет вкладок с матрицами сравнения.")
+    # WARN 9: Если есть аналоги или альтернативы, но нет матриц
+    total_with_matrix_items = stats["with_analog"] + stats["with_alternative"]
+    if total_with_matrix_items > 0 and len(matrix_sheets) == 0:
+        warnings.append(f"WARN: Найдено {stats['with_analog']} аналогов и {stats['with_alternative']} альтернатив, но нет вкладок с матрицами сравнения.")
     
-    # WARN 8: Критичные отличия в матрице → проверить комментарий
+    # WARN 10: Критичные отличия в матрице → проверить комментарий
     for sheet_name in matrix_sheets:
         ws_matrix = wb[sheet_name]
         has_critical = False
@@ -338,8 +374,10 @@ def main():
     print(f"  Всего позиций: {stats['total']}")
     print(f"  С ценой 1 (оригинал): {stats['with_price_1']} ({stats['with_price_1']/max(stats['total'],1)*100:.0f}%)")
     print(f"  С ценой 2 (оригинал): {stats['with_price_2']} ({stats['with_price_2']/max(stats['total'],1)*100:.0f}%)")
-    print(f"  С аналогом: {stats['with_analog']} ({stats['with_analog']/max(stats['total'],1)*100:.0f}%)")
+    print(f"  С аналогом (п.2): {stats['with_analog']} ({stats['with_analog']/max(stats['total'],1)*100:.0f}%)")
     print(f"  Аналог не найден: {stats['analog_not_found']}")
+    print(f"  С альтернативой (п.3): {stats['with_alternative']} ({stats['with_alternative']/max(stats['total'],1)*100:.0f}%)")
+    print(f"  Альтернатива не найдена: {stats['alternative_not_found']}")
     print(f"  Без комментария: {stats['missing_comment']}")
     print(f"  Без цен: {stats['missing_any_price']}")
     
