@@ -1,78 +1,127 @@
-# HARNESS.md — Проект: price-comparison-skill
+# HARNESS.md — Price Comparison Skill v7.4
 
 ## Назначение
 
-Автоматический поиск и сравнение цен на материалы и оборудование у российских поставщиков. Работает с Excel-таблицами, ищет по B2B-каталогам и маркетплейсам.
+Автоматический поиск и сравнение цен на материалы и оборудование. Формула 2+1+1: 2 цены оригинала + аналог другой марки + аналог той же марки.
 
 ## Архитектура
 
 ```
-[Excel input] → [Кэш?] → [Поиск цен] → [Inline Eval] → [Создание Excel] → [Subagent аналоги] → [Итоговый Excel]
+[Excel input] → [Поиск цен] → [Inline Eval] → [Создание Excel] → [Post Eval] → [Итоговый файл]
+                      ↓                                              ↓
+              [Цена не указана]                             [Матрицы аналогов]
+              [Fallback "—"]                                [3 вкладки]
 ```
 
 ## Компоненты
 
 | Компонент | Файл | Ответственность |
 |-----------|------|-----------------|
-| Runner | `scripts/runner_v2.py` | Создание Excel, inline eval |
-| Inline Eval | `scripts/inline_eval.py` | Проверки во время работы |
-| Eval (post-factum) | `scripts/eval.py` | Проверка готового Excel |
-| Matrix Builder | `scripts/matrix_builder.py` | Сборка финального Excel с матрицами |
-| Subagent Retry | `scripts/subagent_retry.py` | Retry + fallback для субагентов |
-| Cache v2 | `scripts/cache_v2.py` | Кэширование с TTL по категориям |
-| Analog Researcher | `scripts/analog_researcher.py` | Исследование аналогов |
+| Runner | `scripts/runner_v3.py` | Создание Excel, inline eval, матрицы аналогов |
+| Eval | `scripts/eval.py` | Post-factum проверка (25 проверок) |
+| Matrix Builder | `scripts/matrix_builder_v3.py` | Сборка матриц сравнения аналогов |
 
-## Форматы данных
+## Input Format
 
-### Input: results.json
+### Excel (input.xlsx)
+```
+№ | Наименование ТМЦ | кол-во | ед. изм.
+```
+
+### JSON (results.json)
 ```json
 [
   {
     "num": 1,
-    "name": "Cisco C9200-24P-E",
-    "price1": 106714,
-    "supplier1": "shop.nag.ru",
-    "url1": "https://shop.nag.ru/cisco-c9200",
-    "price2": 182112,
-    "supplier2": "ediscom.ru",
-    "url2": "https://ediscom.ru/cisco-c9200",
-    "analog": "Huawei S5735-S24P4X",
-    "analog_price": 99194,
-    "analog_supplier": "network.msk.ru",
-    "analog_url": "https://network.msk.ru/huawei-s5735",
-    "comment": "Аналог дешевле на 26%"
+    "name": "Product Name",
+    "price1": 10000,
+    "supplier1": "shop.ru",
+    "url1": "https://shop.ru/product",
+    "price2": 12000,
+    "supplier2": "market.ru",
+    "url2": "https://market.ru/product",
+    "analog_brand": "Analog Brand",
+    "analog_price": 8000,
+    "analog_supplier": "analog.ru",
+    "analog_url": "https://analog.ru/product",
+    "alt_brand": "Alt Brand",
+    "alt_price": 9500,
+    "alt_supplier": "alt.ru",
+    "alt_url": "https://alt.ru/product",
+    "comment": "Согласовать аналог — экономия 20%"
   }
 ]
 ```
 
-### Output: Excel
-- **Вкладка 1:** Сводная таблица (все цены + аналоги)
-- **Вкладка 2:** Аналоги той же марки (отклонения)
-- **Вкладка 3:** Аналоги другой марки (отклонения)
+## Output Format
 
-## Параметры
+### Excel (3 вкладки)
+1. **Сводная таблица** — все цены, URL, рекомендации
+2. **Аналоги другой марки** — матрицы сравнения
+3. **Аналоги той же марки** — матрицы сравнения
 
-- **TTL кэша по категориям:**
-  - Камеры: 14 дней
-  - Коммутаторы: 7 дней
-  - Оптика: 14 дней
-  - Кабели: 30 дней
-- **Retry субагентов:** 3 попытки + fallback
-- **Inline eval:** перед созданием Excel
+## Параметры Eval
+
+### FAIL (блокируют выдачу)
+1. Пустой комментарий
+2. Нет цен (обе "—")
+3. Цены не числа
+4. URL не кликабельны
+5. Одинаковые поставщики
+6. Аналог той же марки в колонке "другая марка"
+7. Цены отличаются >10x (галлюцинация)
+8. Разные единицы измерения
+9. Рекомендация не соответствует цене
+10. Нет источников в матрице
+11. Неполная структура матрицы
+
+### WARN (предупреждения)
+1. Аналог дороже без объяснения
+2. Нет экономии в комментарии
+3. Только 1 цена
+4. Цены >3x разницы
+5. Абсурдные цены (<10₽ или >10М₽)
+6. Нет URL аналога
+7. URL ведёт на поиск/главную
+8. Подозрительно низкая/высокая цена
+9. Дата >7 дней
+10. Мало покрытия (<50% с 2 ценами)
+11. Ссылки не кликабельны
+12. Нет даты
+13. Цена не указана
+14. URL не продуктовая страница
 
 ## Запуск
 
 ```bash
 cd skills/price-comparison
 
-# Создание основного Excel
-python3 scripts/runner_v2.py input.xlsx results.json output/
+# Создание Excel с inline eval
+python3 scripts/runner_v3.py input.xlsx results.json output/
 
-# Тесты
-python3 tests/test_runner.py
+# Проверка готового файла
+python3 scripts/eval.py output/price_comparison_main_*.xlsx
+```
 
-# Очистка просроченного кэша
-python3 -c "from scripts.cache_v2 import PriceCache; c = PriceCache(); c.cleanup_expired()"
+## Graceful Degradation
+
+```
+Позиция начата
+    │
+    ▼
+Цена 1 (10 мин) ──► Не найдена? ──► FAIL
+    │
+    ▼
+Цена 2 (10 мин) ──► Не найдена? ──► "Не найдена за 10 мин", продолжаем
+    │
+    ▼
+Аналог др. марки (5 мин) ──► Не найден? ──► "—", продолжаем
+    │
+    ▼
+Аналог той же марки (10 мин) ──► Не найден? ──► "—", завершаем
+    │
+    ▼
+Позиция готова
 ```
 
 ## State Machine
@@ -81,33 +130,21 @@ python3 -c "from scripts.cache_v2 import PriceCache; c = PriceCache(); c.cleanup
 ANALYZE → VALIDATE → EXECUTE → VERIFY → REPORT
 
 ANALYZE:   Изучить input, определить категории
-VALIDATE:  Проверить кэш, структуру данных
-EXECUTE:   Поиск цен → Inline eval → Создание Excel → Субагенты
-VERIFY:    Post-factum eval + sanity checks
+VALIDATE:  Проверить структуру JSON
+EXECUTE:   Создание Excel → Inline eval → Матрицы аналогов
+VERIFY:    Post-factum eval
 REPORT:    Итоговый Excel + статистика
 ```
 
 ## Чеклист перед запуском
 
 - [ ] Файл results.json валидный
-- [ ] Кэш актуален (или очищен)
-- [ ] API ключи для поиска доступны
-- [ ] Subagent конфигурация корректна
+- [ ] Все обязательные поля заполнены
 - [ ] Папка output/ доступна для записи
+- [ ] Проверены цены на адекватность
 
 ## Ограничения
 
-- Только российские поставщики
 - URL должны быть проверены вручную
 - Аналоги — на усмотрение заказчика
-- Кэш не гарантирует актуальность цен
-
-## Тесты
-
-```bash
-# Все тесты
-python3 tests/test_runner.py
-
-# Только inline eval
-python3 -c "from scripts.inline_eval import inline_eval_all; ..."
-```
+- Цены актуальны на момент поиска
