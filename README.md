@@ -5,6 +5,21 @@
 
 Skill для поиска и сравнения цен на материалы и оборудование. Работает с Excel-таблицами, ищет по B2B-каталогам и маркетплейсам, записывает 2 цены + аналоги.
 
+## ⚠️ Важно: Какие файлы использовать
+
+**Для работы используйте только эти файлы:**
+
+| Файл | Назначение | Обязательный |
+|------|-----------|-------------|
+| `scripts/runner_v3.py` | Генерация Excel с inline eval | ✅ Да |
+| `scripts/eval.py` | Post-factum проверка (25 проверок) | ✅ Да |
+| `scripts/inline_eval.py` | Inline проверки во время работы | ✅ Да (вызывается runner_v3.py) |
+| `scripts/matrix_builder_v3.py` | Сборка матриц аналогов | ⚪ Опционально |
+| `SKILL.md` | Полная документация для агента | 📖 Читать |
+| `HARNESS.md` | Архитектура и state machine | 📖 Читать |
+
+**Не используйте** файлы из `archive/v5-v6/` — они устарели.
+
 ## Формула 2+1+1
 
 | Тип | Описание | Лимит | Fallback |
@@ -35,15 +50,27 @@ python3 scripts/runner_v3.py input.xlsx results.json output/
 python3 scripts/eval.py output/price_comparison_main_*.xlsx
 ```
 
-## Структура
+## Структура репозитория
 
-| Файл | Назначение |
-|------|------------|
-| `SKILL.md` | Полная документация + инструкции для агента |
-| `scripts/runner_v3.py` | Генерация Excel с inline eval |
-| `scripts/eval.py` | Post-factum проверка (25 проверок) |
-| `scripts/matrix_builder_v3.py` | Сборка матриц аналогов |
-| `templates/` | Шаблоны параметров по категориям |
+```
+price-comparison-skill/
+├── scripts/
+│   ├── runner_v3.py          ← Используй это (основной runner)
+│   ├── eval.py               ← Используй это (проверка)
+│   ├── inline_eval.py        ← Используй это (inline проверки)
+│   ├── matrix_builder_v3.py  ← Используй это (матрицы аналогов)
+│   └── ...                   ← Другие актуальные скрипты
+├── archive/
+│   └── v5-v6/                ← ❌ НЕ ИСПОЛЬЗУЙ (старые версии)
+│       ├── runner.py
+│       ├── runner_v2.py
+│       ├── cache_v2.py
+│       └── ...
+├── SKILL.md                  ← 📖 Документация для агента
+├── HARNESS.md                ← 📖 Архитектура
+├── README.md                 ← 📖 Этот файл
+└── templates/                ← Шаблоны категорий
+```
 
 ## Архитектура
 
@@ -58,8 +85,8 @@ python3 scripts/eval.py output/price_comparison_main_*.xlsx
 - **v7.4** — URL validation + fallback prices + matrix sheets
 - **v7.3** — Anti-hallucination eval checks
 - **v7.0** — Formula 2+1+1 + Clickable Links + Full Design
-- **v6.0** — Tests, retry/fallback, cache v2
-- **v5.2** — Excel Format v2: Tab1 prices, Tab2 same-brand, Tab3 cross-brand
+- **v6.0** — Tests, retry/fallback, cache v2 (в архиве)
+- **v5.2** — Excel Format v2 (в архиве)
 
 ## Лицензия
 
