@@ -79,10 +79,10 @@ def create_main_sheet(wb, results):
     # Headers
     headers = [
         '№', 'Наименование ТМЦ',
-        'Цена 1 (₽)', 'Магазин 1',
-        'Цена 2 (₽)', 'Магазин 2',
-        'Аналог другой\nмарки (₽)', 'Магазин аналога',
-        'Аналог той же\nмарки (₽)', 'Магазин альтерн.',
+        'Цена 1 (₽)', 'Магазин 1', 'URL 1',
+        'Цена 2 (₽)', 'Магазин 2', 'URL 2',
+        'Аналог другой\nмарки (₽)', 'Магазин аналога', 'URL аналога',
+        'Аналог той же\nмарки (₽)', 'Магазин альтерн.', 'URL альтерн.',
         'Рекомендация'
     ]
     
@@ -111,17 +111,15 @@ def create_main_sheet(wb, results):
         url1 = item.get('url1', '')
         
         if p1:
-            # Есть и цена, и URL
             c = ws.cell(row=r_idx, column=3, value=p1)
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = url1
+            if is_clickable_url(url1):
+                c.hyperlink = url1
         elif url1 and is_clickable_url(url1):
-            # Нет цены, но есть URL на товар → цена не указана
             c = ws.cell(row=r_idx, column=3, value='Цена не указана')
             c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
             c.hyperlink = url1
         else:
-            # Нет ни цены, ни URL
             c = ws.cell(row=r_idx, column=3, value='Не найдена')
             c.font = Font(name='Calibri', size=9, color='9C0006', italic=True)
         
@@ -133,66 +131,114 @@ def create_main_sheet(wb, results):
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = SHOP_FONT if p1 else Font(name='Calibri', size=8, color='999999', italic=True)
         
+        # URL 1
+        url1_val = item.get('url1', '')
+        c = ws.cell(row=r_idx, column=5, value=url1_val if is_clickable_url(url1_val) else '—')
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        if is_clickable_url(url1_val):
+            c.font = LINK_FONT
+            c.hyperlink = url1_val
+        else:
+            c.font = Font(name='Calibri', size=8, color='999999', italic=True)
+        
         # === Price 2 (optional, 10 min limit) ===
         p2 = item.get('price2')
         url2 = item.get('url2', '')
         
         if p2:
-            c = ws.cell(row=r_idx, column=5, value=p2)
+            c = ws.cell(row=r_idx, column=6, value=p2)
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = url2
+            if is_clickable_url(url2):
+                c.hyperlink = url2
         elif url2 and is_clickable_url(url2):
-            # Нет цены, но есть URL → цена не указана
-            c = ws.cell(row=r_idx, column=5, value='Цена не указана')
+            c = ws.cell(row=r_idx, column=6, value='Цена не указана')
             c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
             c.hyperlink = url2
         else:
-            c = ws.cell(row=r_idx, column=5, value='Не найдена')
+            c = ws.cell(row=r_idx, column=6, value='Не найдена')
             c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
         
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         
         # Shop 2
         s2 = item.get('supplier2', '—')
-        c = ws.cell(row=r_idx, column=6, value=s2)
+        c = ws.cell(row=r_idx, column=7, value=s2)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = SHOP_FONT if p2 else Font(name='Calibri', size=8, color='999999', italic=True)
         
+        # URL 2
+        url2_val = item.get('url2', '')
+        c = ws.cell(row=r_idx, column=8, value=url2_val if is_clickable_url(url2_val) else '—')
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        if is_clickable_url(url2_val):
+            c.font = LINK_FONT
+            c.hyperlink = url2_val
+        else:
+            c.font = Font(name='Calibri', size=8, color='999999', italic=True)
+        
         # === Analog other brand (optional, 5 min limit) ===
         pa = item.get('analog_price')
-        c = ws.cell(row=r_idx, column=7, value=pa if pa else '—')
-        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        analog_url = item.get('analog_url', '')
+        
         if pa:
+            c = ws.cell(row=r_idx, column=9, value=pa)
+            c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = item.get('analog_url', '')
+            if is_clickable_url(analog_url):
+                c.hyperlink = analog_url
         else:
+            c = ws.cell(row=r_idx, column=9, value='—')
+            c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
             c.font = Font(name='Calibri', size=10, color='999999')
         
         # Analog shop
         a_s = item.get('analog_supplier', '—')
-        c = ws.cell(row=r_idx, column=8, value=a_s if pa else '—')
+        c = ws.cell(row=r_idx, column=10, value=a_s if pa else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = SHOP_FONT if pa else Font(name='Calibri', size=8, color='999999', italic=True)
         
+        # Analog URL
+        c = ws.cell(row=r_idx, column=11, value=analog_url if is_clickable_url(analog_url) else '—')
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        if is_clickable_url(analog_url):
+            c.font = LINK_FONT
+            c.hyperlink = analog_url
+        else:
+            c.font = Font(name='Calibri', size=8, color='999999', italic=True)
+        
         # === Alternative same brand (optional, 10 min limit) ===
         alt_p = item.get('alt_price')
-        c = ws.cell(row=r_idx, column=9, value=alt_p if alt_p else '—')
-        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        alt_url = item.get('alt_url', '')
+        
         if alt_p:
+            c = ws.cell(row=r_idx, column=12, value=alt_p)
+            c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = item.get('alt_url', '')
+            if is_clickable_url(alt_url):
+                c.hyperlink = alt_url
         else:
+            c = ws.cell(row=r_idx, column=12, value='—')
+            c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
             c.font = Font(name='Calibri', size=10, color='999999')
         
         # Alt shop
         alt_s = item.get('alt_supplier', '—')
-        c = ws.cell(row=r_idx, column=10, value=alt_s if alt_p else '—')
+        c = ws.cell(row=r_idx, column=13, value=alt_s if alt_p else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = SHOP_FONT if alt_p else Font(name='Calibri', size=8, color='999999', italic=True)
         
+        # Alt URL
+        c = ws.cell(row=r_idx, column=14, value=alt_url if is_clickable_url(alt_url) else '—')
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        if is_clickable_url(alt_url):
+            c.font = LINK_FONT
+            c.hyperlink = alt_url
+        else:
+            c.font = Font(name='Calibri', size=8, color='999999', italic=True)
+        
         # === Recommendation ===
         rec = item.get('comment', '')
-        c = ws.cell(row=r_idx, column=11, value=rec)
+        c = ws.cell(row=r_idx, column=15, value=rec)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER
         c.font = Font(name='Calibri', size=9, bold=True)
         
@@ -224,13 +270,17 @@ def create_main_sheet(wb, results):
     ws.column_dimensions['B'].width = 32
     ws.column_dimensions['C'].width = 12
     ws.column_dimensions['D'].width = 16
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 16
+    ws.column_dimensions['E'].width = 30
+    ws.column_dimensions['F'].width = 12
     ws.column_dimensions['G'].width = 16
-    ws.column_dimensions['H'].width = 16
+    ws.column_dimensions['H'].width = 30
     ws.column_dimensions['I'].width = 16
     ws.column_dimensions['J'].width = 16
-    ws.column_dimensions['K'].width = 24
+    ws.column_dimensions['K'].width = 30
+    ws.column_dimensions['L'].width = 16
+    ws.column_dimensions['M'].width = 16
+    ws.column_dimensions['N'].width = 30
+    ws.column_dimensions['O'].width = 28
     
     ws.freeze_panes = 'A2'
     
