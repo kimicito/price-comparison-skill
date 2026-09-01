@@ -64,7 +64,7 @@ LEFT_ALIGN = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
 
 def create_main_sheet(wb, results):
-    """Create the main results sheet with 2+1+1 formula."""
+    """Create the main results sheet with 2+1+1 formula and graceful handling of missing data."""
     ws = wb.active
     ws.title = "Сводная таблица"
     
@@ -98,46 +98,55 @@ def create_main_sheet(wb, results):
         c.alignment = LEFT_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = Font(name='Calibri', size=9)
         
-        # Price 1 (clickable)
+        # === Price 1 (REQUIRED) ===
         p1 = item.get('price1')
-        c = ws.cell(row=r_idx, column=3, value=p1)
+        c = ws.cell(row=r_idx, column=3, value=p1 if p1 else 'Не найдена')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         if p1:
             c.font = PRICE_FONT; c.number_format = '#,##0'
             c.hyperlink = item.get('url1', '')
+        else:
+            c.font = Font(name='Calibri', size=9, color='9C0006', italic=True)
         
         # Shop 1
-        c = ws.cell(row=r_idx, column=4, value=item.get('supplier1', ''))
+        s1 = item.get('supplier1', '—')
+        c = ws.cell(row=r_idx, column=4, value=s1)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         c.font = SHOP_FONT
         
-        # Price 2 (clickable)
+        # === Price 2 (optional, 10 min limit) ===
         p2 = item.get('price2')
-        c = ws.cell(row=r_idx, column=5, value=p2)
+        c = ws.cell(row=r_idx, column=5, value=p2 if p2 else 'Не найдена')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         if p2:
             c.font = PRICE_FONT; c.number_format = '#,##0'
             c.hyperlink = item.get('url2', '')
+        else:
+            c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
         
         # Shop 2
-        c = ws.cell(row=r_idx, column=6, value=item.get('supplier2', ''))
+        s2 = item.get('supplier2', '—')
+        c = ws.cell(row=r_idx, column=6, value=s2)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
-        c.font = SHOP_FONT
+        c.font = SHOP_FONT if p2 else Font(name='Calibri', size=8, color='999999', italic=True)
         
-        # Analog price (clickable)
+        # === Analog other brand (optional, 5 min limit) ===
         pa = item.get('analog_price')
-        c = ws.cell(row=r_idx, column=7, value=pa)
+        c = ws.cell(row=r_idx, column=7, value=pa if pa else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         if pa:
             c.font = PRICE_FONT; c.number_format = '#,##0'
             c.hyperlink = item.get('analog_url', '')
+        else:
+            c.font = Font(name='Calibri', size=10, color='999999')
         
         # Analog shop
-        c = ws.cell(row=r_idx, column=8, value=item.get('analog_supplier', ''))
+        a_s = item.get('analog_supplier', '—')
+        c = ws.cell(row=r_idx, column=8, value=a_s if pa else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
-        c.font = SHOP_FONT
+        c.font = SHOP_FONT if pa else Font(name='Calibri', size=8, color='999999', italic=True)
         
-        # Alt price (clickable)
+        # === Alternative same brand (optional, 10 min limit) ===
         alt_p = item.get('alt_price')
         c = ws.cell(row=r_idx, column=9, value=alt_p if alt_p else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
@@ -148,12 +157,12 @@ def create_main_sheet(wb, results):
             c.font = Font(name='Calibri', size=10, color='999999')
         
         # Alt shop
-        alt_s = item.get('alt_supplier')
-        c = ws.cell(row=r_idx, column=10, value=alt_s if alt_s else '—')
+        alt_s = item.get('alt_supplier', '—')
+        c = ws.cell(row=r_idx, column=10, value=alt_s if alt_p else '—')
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
-        c.font = SHOP_FONT if alt_s else Font(name='Calibri', size=8, color='999999')
+        c.font = SHOP_FONT if alt_p else Font(name='Calibri', size=8, color='999999', italic=True)
         
-        # Recommendation with color
+        # === Recommendation ===
         rec = item.get('comment', '')
         c = ws.cell(row=r_idx, column=11, value=rec)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER
@@ -169,6 +178,18 @@ def create_main_sheet(wb, results):
             else:
                 c.fill = REC_GREEN
                 c.font = Font(name='Calibri', size=9, bold=True, color='006100')
+        elif not p1:
+            c.value = '❌ Цена 1 не найдена — позиция не оценена'
+            c.fill = REC_RED
+            c.font = Font(name='Calibri', size=9, bold=True, color='9C0006')
+        elif not p2 and not pa and not alt_p:
+            c.value = 'Оригинал подтверждён. Аналоги не найдены.'
+            c.fill = REC_GREEN
+            c.font = Font(name='Calibri', size=9, bold=True, color='006100')
+        elif not p2:
+            c.value = 'Цена 1 подтверждена. Второй поставщик не найден.'
+            c.fill = REC_YELLOW
+            c.font = Font(name='Calibri', size=9, bold=True, color='9C5700')
     
     # Column widths
     ws.column_dimensions['A'].width = 5
@@ -188,7 +209,7 @@ def create_main_sheet(wb, results):
     # Prepare analogs for sub-agent research
     analogs_to_research = []
     for item in results:
-        if item.get('analog_brand'):
+        if item.get('analog_brand') and item.get('analog_price'):
             analogs_to_research.append({
                 'type': 'other_brand',
                 'original': item['name'],
@@ -197,7 +218,7 @@ def create_main_sheet(wb, results):
                 'analog_price': item.get('analog_price'),
                 'row_num': item.get('num')
             })
-        if item.get('alt_brand'):
+        if item.get('alt_brand') and item.get('alt_price'):
             analogs_to_research.append({
                 'type': 'same_brand',
                 'original': item['name'],
