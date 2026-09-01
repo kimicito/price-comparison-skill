@@ -40,6 +40,14 @@ from datetime import datetime
 from inline_eval import inline_eval_all
 
 
+def is_clickable_url(url):
+    """Проверяет, что URL кликабельный."""
+    if not url:
+        return False
+    url = str(url).strip()
+    return url.startswith("http://") or url.startswith("https://")
+
+
 # === DESIGN CONSTANTS ===
 HEADER_FILL = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
 HEADER_FONT = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
@@ -100,29 +108,49 @@ def create_main_sheet(wb, results):
         
         # === Price 1 (REQUIRED) ===
         p1 = item.get('price1')
-        c = ws.cell(row=r_idx, column=3, value=p1 if p1 else 'Не найдена')
-        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        url1 = item.get('url1', '')
+        
         if p1:
+            # Есть и цена, и URL
+            c = ws.cell(row=r_idx, column=3, value=p1)
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = item.get('url1', '')
+            c.hyperlink = url1
+        elif url1 and is_clickable_url(url1):
+            # Нет цены, но есть URL на товар → цена не указана
+            c = ws.cell(row=r_idx, column=3, value='Цена не указана')
+            c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
+            c.hyperlink = url1
         else:
+            # Нет ни цены, ни URL
+            c = ws.cell(row=r_idx, column=3, value='Не найдена')
             c.font = Font(name='Calibri', size=9, color='9C0006', italic=True)
+        
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         
         # Shop 1
         s1 = item.get('supplier1', '—')
         c = ws.cell(row=r_idx, column=4, value=s1)
         c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
-        c.font = SHOP_FONT
+        c.font = SHOP_FONT if p1 else Font(name='Calibri', size=8, color='999999', italic=True)
         
         # === Price 2 (optional, 10 min limit) ===
         p2 = item.get('price2')
-        c = ws.cell(row=r_idx, column=5, value=p2 if p2 else 'Не найдена')
-        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
+        url2 = item.get('url2', '')
+        
         if p2:
+            c = ws.cell(row=r_idx, column=5, value=p2)
             c.font = PRICE_FONT; c.number_format = '#,##0'
-            c.hyperlink = item.get('url2', '')
-        else:
+            c.hyperlink = url2
+        elif url2 and is_clickable_url(url2):
+            # Нет цены, но есть URL → цена не указана
+            c = ws.cell(row=r_idx, column=5, value='Цена не указана')
             c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
+            c.hyperlink = url2
+        else:
+            c = ws.cell(row=r_idx, column=5, value='Не найдена')
+            c.font = Font(name='Calibri', size=9, color='9C5700', italic=True)
+        
+        c.alignment = CENTER_ALIGN; c.border = THIN_BORDER; c.fill = bg
         
         # Shop 2
         s2 = item.get('supplier2', '—')

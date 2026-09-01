@@ -24,12 +24,72 @@ except ImportError:
     sys.exit(1)
 
 
-def is_clickable_url(url):
-    """Проверяет, что URL кликабельный."""
+def is_product_page_url(url, sku_name=""):
+    """
+    Проверяет, что URL ведёт на конкретную страницу товара, а не на поиск/главную/404.
+    
+    Возвращает: (is_valid: bool, reason: str, level: "FAIL"|"WARN")
+    """
     if not url:
-        return False
-    url = str(url).strip()
-    return url.startswith("http://") or url.startswith("https://")
+        return False, "URL пустой", "FAIL"
+    
+    url_str = str(url).strip().lower()
+    
+    # Проверка на главную страницу (без пути)
+    parsed = urlparse(url_str)
+    path = parsed.path.strip('/') if parsed.path else ''
+    
+    # Если путь пустой — это главная страница
+    if not path or path in ['', '/', 'index.html', 'index.php']:
+        return False, f"URL ведёт на главную страницу ({parsed.netloc}), не на товар", "FAIL"
+    
+    # Паттерны поиска/каталога — не конкретный товар
+    search_patterns = [
+        '/search', '?q=', 'query=', '/catalog/', '/category/', 
+        '/products/', '/product-list/', '/filter/',
+        '/collection/', '/tag/', '/brand/',
+    ]
+    for pattern in search_patterns:
+        if pattern in url_str:
+            return False, f"URL содержит паттерн поиска/каталога ({pattern})", "WARN"
+    
+    # Проверка на 404-паттерны (некоторые магазины редиректят на 404-страницу)
+    not_found_patterns = [
+        '/404', '/not-found', '/error', '/no-product',
+        '?error=', '?status=404', '/page-not-found'
+    ]
+    for pattern in not_found_patterns:
+        if pattern in url_str:
+            return False, f"URL содержит паттерн 404/ошибки ({pattern})", "FAIL"
+    
+    # Проверка что URL содержит идентификатор товара (артикул, ID, slug)
+    # Хороший URL товара содержит конкретный идентификатор, а не общие слова
+    common_words = ['catalog', 'category', 'search', 'products', 'collection', 'tag']
+    path_segments = [s for s in path.split('/') if s]
+    
+    # Если последний сегмент — общее слово, скорее всего это не товар
+    if path_segments and path_segments[-1] in common_words:
+        return False, f"URL оканчивается на общее слово '{path_segments[-1]}'", "WARN"
+    
+    # Если URL слишком короткий (< 2 сегмента после домена) — подозрительно
+    if len(path_segments) < 2:
+        # Но если есть query-параметр с ID — ок
+        if not any(param in url_str for param in ['?id=', '&id=', '/id/', '-id-']):
+            return False, f"URL слишком короткий ({len(path_segments)} сегмента), похож на категорию", "WARN"
+    
+    # Проверка: URL должен содержать числа или специфичные символы (артикул обычно содержит цифры)
+    # Это эвристика — не 100%, но ловит явные проблемы
+    last_segment = path_segments[-1] if path_segments else ''
+    has_identifier = bool(re.search(r'\d', last_segment)) or bool(re.search(r'[-_][a-z0-9]{3,}', last_segment))
+    
+    if not has_identifier and sku_name:
+        # Проверим, что в URL есть часть артикула (без учёта регистра и спецсимволов)
+        sku_clean = re.sub(r'[^a-z0-9]', '', str(sku_name).lower())[:10]
+        url_clean = re.sub(r'[^a-z0-9]', '', url_str)
+        if sku_clean and sku_clean not in url_clean:
+            return False, f"URL не содержит идентификатора товара (артикул '{sku_name}' не найден в URL)", "WARN"
+    
+    return True, "OK", "OK"
 
 
 def get_domain(url):
@@ -50,8 +110,12 @@ def is_numeric_price(value):
         return False
     if isinstance(value, (int, float)):
         return True
+    # Проверяем специальные строковые значения
+    str_val = str(value).strip()
+    if str_val in ["Цена не указана", "Не найдена", "—", "", "-"]:
+        return False
     # Пробуем распарсить строку
-    cleaned = str(value).strip().replace(" ", "").replace("₽", "").replace("$", "")
+    cleaned = str_val.replace(" ", "").replace("₽", "").replace("$", "")
     # Умная обработка запятых: если запятая между цифрами — разделитель тысяч, удаляем
     # Если запятая перед 1-2 цифрами в конце — десятичный разделитель, заменяем на точку
     import re
@@ -199,22 +263,38 @@ def eval_price_comparison(filepath, input_filepath=None):
             errors.append(f"FAIL [{sku}]: Нет ни одной цены оригинала. Минимум 1 цена обязательна.")
             continue
         
-        # FAIL 3: Цены — числовой формат
-        if has_price_1 and not is_numeric_price(price_1):
-            errors.append(f"FAIL [{sku}]: Цена 1 не является числом ({price_1}). Должна быть числовая ячейка.")
-        if has_price_2 and not is_numeric_price(price_2):
-            errors.append(f"FAIL [{sku}]: Цена 2 не является числом ({price_2}). Должна быть числовая ячейка.")
-        if has_analog and analog_price is not None and str(analog_price).strip() != "" and not is_numeric_price(analog_price):
+        # FAIL 3: Цены — числовой формат (кроме спецзначений)
+        price_1_is_numeric = is_numeric_price(price_1)
+        price_2_is_numeric = is_numeric_price(price_2)
+        analog_price_is_numeric = is_numeric_price(analog_price) if analog_price is not None else False
+        
+        # "Цена не указана" — это нормально, если есть URL
+        price_1_is_special = str(price_1).strip() in ["Цена не указана", "Не найдена", "—"] if price_1 else False
+        price_2_is_special = str(price_2).strip() in ["Цена не указана", "Не найдена", "—"] if price_2 else False
+        
+        if has_price_1 and not price_1_is_numeric and not price_1_is_special:
+            errors.append(f"FAIL [{sku}]: Цена 1 не является числом ({price_1}). Должна быть числовая ячейка или 'Цена не указана'.")
+        if has_price_2 and not price_2_is_numeric and not price_2_is_special:
+            errors.append(f"FAIL [{sku}]: Цена 2 не является числом ({price_2}). Должна быть числовая ячейка или 'Цена не указана'.")
+        if has_analog and analog_price is not None and str(analog_price).strip() != "" and str(analog_price).strip() != "—" and not analog_price_is_numeric:
             errors.append(f"FAIL [{sku}]: Цена аналога не является числом ({analog_price}).")
         
-        # FAIL 4: URL кликабельны
-        if has_price_1 and not is_clickable_url(url_1):
-            errors.append(f"FAIL [{sku}]: URL поставщика 1 не кликабелен ({url_1})")
+        # FAIL 4: URL ведут на конкретный товар, а не на поиск/главную/404
+        url1_check = is_product_page_url(url_1, sku)
+        if has_price_1 and not url1_check[0]:
+            if url1_check[2] == "FAIL":
+                errors.append(f"FAIL [{sku}]: {url1_check[1]} — URL 1: {url_1}")
+            else:
+                warnings.append(f"WARN [{sku}]: {url1_check[1]} — URL 1: {url_1}")
         elif is_clickable_url(url_1):
             stats["with_url_1"] += 1
         
-        if has_price_2 and not is_clickable_url(url_2):
-            errors.append(f"FAIL [{sku}]: URL поставщика 2 не кликабелен ({url_2})")
+        url2_check = is_product_page_url(url_2, sku)
+        if has_price_2 and not url2_check[0]:
+            if url2_check[2] == "FAIL":
+                errors.append(f"FAIL [{sku}]: {url2_check[1]} — URL 2: {url_2}")
+            else:
+                warnings.append(f"WARN [{sku}]: {url2_check[1]} — URL 2: {url_2}")
         elif is_clickable_url(url_2):
             stats["with_url_2"] += 1
         
@@ -310,17 +390,15 @@ def eval_price_comparison(filepath, input_filepath=None):
         if has_analog and analog_price is not None and not is_clickable_url(analog_url):
             warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({analog_url}).")
         
-        # WARN 7: URL ведёт на поиск или главную страницу (не на конкретный товар)
-        if has_price_1 and url_1:
-            url_str = str(url_1).lower()
-            search_patterns = ['/search', '?q=', 'query=', '/catalog/', '/category/', '/products/']
-            if any(p in url_str for p in search_patterns) or url_str.rstrip('/').endswith('.ru') or url_str.rstrip('/').endswith('.com'):
-                warnings.append(f"WARN [{sku}]: URL поставщика 1 ведёт на поиск/главную, не на конкретный товар ({url_1})")
-        
-        if has_price_2 and url_2:
-            url_str = str(url_2).lower()
-            if any(p in url_str for p in search_patterns) or url_str.rstrip('/').endswith('.ru') or url_str.rstrip('/').endswith('.com'):
-                warnings.append(f"WARN [{sku}]: URL поставщика 2 ведёт на поиск/главную, не на конкретный товар ({url_2})")
+        # WARN 7: URL ведёт на поиск или главную страницу (уже проверено в FAIL 4)
+        # Дополнительная проверка для аналогов
+        if has_analog and analog_url:
+            analog_url_check = is_product_page_url(analog_url, analog)
+            if not analog_url_check[0]:
+                if analog_url_check[2] == "FAIL":
+                    errors.append(f"FAIL [{sku}]: {analog_url_check[1]} — URL аналога: {analog_url}")
+                else:
+                    warnings.append(f"WARN [{sku}]: {analog_url_check[1]} — URL аналога: {analog_url}")
         
         # WARN 8: Подозрительно низкая цена — возможно, за метр/кг/упаковку
         if has_price_1:
