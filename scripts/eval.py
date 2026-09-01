@@ -24,6 +24,14 @@ except ImportError:
     sys.exit(1)
 
 
+def is_clickable_url(url):
+    """Проверяет, что URL кликабельный (начинается с http)."""
+    if not url:
+        return False
+    url_str = str(url).strip().lower()
+    return url_str.startswith('http://') or url_str.startswith('https://')
+
+
 def is_product_page_url(url, sku_name=""):
     """
     Проверяет, что URL ведёт на конкретную страницу товара, а не на поиск/главную/404.
