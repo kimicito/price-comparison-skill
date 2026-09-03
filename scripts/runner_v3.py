@@ -48,6 +48,27 @@ def is_clickable_url(url):
     return url.startswith("http://") or url.startswith("https://")
 
 
+def format_price(price, currency=None, unit=None):
+    """Форматирует цену с валютой и размерностью.
+    
+    Args:
+        price: число или None
+        currency: символ валюты ('₽', '$', '€', 'CNY' и т.д.)
+        unit: размерность ('шт', 'кг', 'упак', 'м' и т.д.)
+    
+    Returns: строка вида "1000 ₽ за шт" или "—"
+    """
+    if price is None or price == '' or price == '—':
+        return '—'
+    
+    result = f"{price}"
+    if currency:
+        result += f" {currency}"
+    if unit:
+        result += f" за {unit}"
+    return result
+
+
 # === DESIGN CONSTANTS ===
 HEADER_FILL = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
 HEADER_FONT = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
@@ -80,11 +101,11 @@ def create_main_sheet(wb, results):
     # Headers
     headers = [
         '№', 'Наименование ТМЦ',
-        'Цена 1 (₽)', 'Магазин 1', 'URL 1',
-        'Цена 2 (₽)', 'Магазин 2', 'URL 2',
-        'Аналог другой\nмарки (₽)', 'Магазин аналога', 'URL аналога',
-        'Аналог той же\nмарки (₽)', 'Магазин альтерн.', 'URL альтерн.',
-        'Рекомендация'
+        'Цена 1', 'Магазин 1', 'URL 1',
+        'Цена 2', 'Магазин 2', 'URL 2',
+        'Аналог другой\nмарки', 'Магазин аналога', 'URL аналога',
+        'Аналог той же\nмарки', 'Магазин альтерн.', 'URL альтерн.',
+        'Комментарий', 'Дата поиска'
     ]
     
     for col, header in enumerate(headers, 1):
@@ -350,7 +371,7 @@ def create_analog_matrices(wb, results):
             
             # Price row: handle null analog_price
             if item.get('analog_price'):
-                price_analog = f"{item['analog_price']} ₽"
+                price_analog = format_price(item.get('analog_price'), item.get('analog_currency'), item.get('analog_unit'))
                 if item.get('price1') and item['price1'] > 0:
                     savings = int((1 - item['analog_price']/item['price1'])*100)
                     influence = f"Экономия {savings}%"
@@ -363,7 +384,7 @@ def create_analog_matrices(wb, results):
             # Data rows — dynamic based on available specs
             # Build rows from actual data, fallback to minimal set
             data_rows = [
-                ['Цена', f"{item.get('price1', '—')} ₽", price_analog, '—', influence],
+                ['Цена', format_price(item.get('price1'), item.get('currency1'), item.get('unit1')), price_analog, '—', influence],
                 ['Производитель', item['name'].split()[0] if item['name'] else '—', 
                  item['analog_brand'].split()[0] if item.get('analog_brand') else '—', 
                  'Другая марка' if item.get('analog_brand') else '—', 
@@ -465,7 +486,7 @@ def create_analog_matrices(wb, results):
             
             # Price row: handle null alt_price
             if item.get('alt_price'):
-                price_alt = f"{item['alt_price']} ₽"
+                price_alt = format_price(item.get('alt_price'), item.get('alt_currency'), item.get('alt_unit'))
                 if item.get('price1') and item['price1'] > 0:
                     diff = int((item['alt_price']/item['price1']-1)*100)
                     influence = f"Разница {diff}%"
@@ -477,7 +498,7 @@ def create_analog_matrices(wb, results):
             
             # Data rows — dynamic based on available specs
             data_rows = [
-                ['Цена', f"{item.get('price1', '—')} ₽", price_alt, '—', influence],
+                ['Цена', format_price(item.get('price1'), item.get('currency1'), item.get('unit1')), price_alt, '—', influence],
                 ['Производитель / Модель', 
                  item['name'].split()[0] if item['name'] else '—',
                  item['alt_brand'].split()[0] if item.get('alt_brand') else '—',

@@ -37,13 +37,19 @@
     "name": "Product Name",
     "description": "Описание для сравнения (опционально)",
     "price1": 10000,
+    "currency1": "₽",
+    "unit1": "шт",
     "supplier1": "shop.ru",
     "url1": "https://shop.ru/product",
     "price2": 12000,
+    "currency2": "₽",
+    "unit2": "шт",
     "supplier2": "market.ru",
     "url2": "https://market.ru/product",
     "analog_brand": "Analog Brand",
     "analog_price": 8000,
+    "analog_currency": "$",
+    "analog_unit": "шт",
     "analog_supplier": "analog.ru",
     "analog_url": "https://analog.ru/product",
     "specs": {
@@ -53,6 +59,8 @@
     },
     "alt_brand": "Alt Brand",
     "alt_price": 9500,
+    "alt_currency": "€",
+    "alt_unit": "упак",
     "alt_supplier": "alt.ru",
     "alt_url": "https://alt.ru/product",
     "alt_specs": {
@@ -64,6 +72,12 @@
   }
 ]
 ```
+
+**Поля currency / unit** (опционально):
+- `currency1`, `currency2`, `analog_currency`, `alt_currency` — символ валюты ('₽', '$', '€', 'CNY')
+- `unit1`, `unit2`, `analog_unit`, `alt_unit` — размерность ('шт', 'кг', 'упак', 'м', 'л')
+- Если переданы — отображаются в таблице: `1000 ₽ за шт`
+- Если не переданы — показывается только число
 
 **Поля specs/alt_specs** (опционально):
 - Ключ — название параметра (Длина, Ширина, Материал, Цвет, и т.д.)
