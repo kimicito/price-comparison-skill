@@ -360,13 +360,30 @@ def create_analog_matrices(wb, results):
                 price_analog = "По запросу"
                 influence = "Цену уточняйте у поставщика"
             
-            # Data rows
+            # Data rows — dynamic based on available specs
+            # Build rows from actual data, fallback to minimal set
             data_rows = [
                 ['Цена', f"{item.get('price1', '—')} ₽", price_analog, '—', influence],
-                ['Марка', item['name'].split()[0], item['analog_brand'].split()[0], 'Другая марка', 'Совместимость по спецификации'],
-                ['Скорость', 'По спецификации', 'По спецификации', '✅ Совпадает', '—'],
-                ['Стандарт', 'IEEE 802.3', 'IEEE 802.3', '✅ Совпадает', '—'],
+                ['Производитель', item['name'].split()[0] if item['name'] else '—', 
+                 item['analog_brand'].split()[0] if item.get('analog_brand') else '—', 
+                 'Другая марка' if item.get('analog_brand') else '—', 
+                 'Сравнить спецификации'],
             ]
+            
+            # Add spec rows if available in results
+            specs = item.get('specs', {})
+            if specs and isinstance(specs, dict):
+                for param, value in specs.items():
+                    analog_val = specs.get(f"analog_{param}", value)
+                    match = '✅ Совпадает' if str(value).lower() == str(analog_val).lower() else '⚠️ Проверить'
+                    data_rows.append([param, value, analog_val, match, '—'])
+            
+            # Fallback minimal spec rows if no specs provided
+            if len(data_rows) < 3:
+                data_rows.extend([
+                    ['Описание', item.get('description', 'По спецификации') or 'По спецификации', 
+                     'По спецификации', '—', 'Сравнить характеристики'],
+                ])
             
             for row_data in data_rows:
                 for col_num, value in enumerate(row_data, 1):
@@ -458,11 +475,30 @@ def create_analog_matrices(wb, results):
                 price_alt = "По запросу"
                 influence = "Цену уточняйте у поставщика"
             
-            # Data rows
+            # Data rows — dynamic based on available specs
             data_rows = [
                 ['Цена', f"{item.get('price1', '—')} ₽", price_alt, '—', influence],
-                ['Модель', item['name'].split()[1] if len(item['name'].split()) > 1 else '—', item['alt_brand'].split()[0], 'Другая модель', 'Та же марка, другая модель'],
+                ['Производитель / Модель', 
+                 item['name'].split()[0] if item['name'] else '—',
+                 item['alt_brand'].split()[0] if item.get('alt_brand') else '—',
+                 'Другая модель' if item.get('alt_brand') else '—',
+                 'Та же марка, другая модель'],
             ]
+            
+            # Add spec rows if available
+            alt_specs = item.get('alt_specs', {})
+            if alt_specs and isinstance(alt_specs, dict):
+                for param, value in alt_specs.items():
+                    original_val = item.get('specs', {}).get(param, '—') if item.get('specs') else '—'
+                    match = '✅ Совпадает' if str(original_val).lower() == str(value).lower() else '⚠️ Отличается'
+                    data_rows.append([param, original_val, value, match, '—'])
+            
+            # Fallback minimal spec rows
+            if len(data_rows) < 3:
+                data_rows.extend([
+                    ['Описание', item.get('description', 'По спецификации') or 'По спецификации',
+                     'По спецификации', '—', 'Сравнить характеристики'],
+                ])
             
             for row_data in data_rows:
                 for col_num, value in enumerate(row_data, 1):
