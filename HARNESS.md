@@ -1,4 +1,4 @@
-# HARNESS.md — Price Comparison Skill v7.4
+# HARNESS.md — Price Comparison Skill v7.5
 
 ## Назначение
 
@@ -19,6 +19,7 @@
 |-----------|------|-----------------|
 | Runner | `scripts/runner_v3.py` | Создание Excel, inline eval, матрицы аналогов |
 | Eval | `scripts/eval.py` | Post-factum проверка (25 проверок) |
+| Inline Eval | `scripts/inline_eval.py` | Проверка во время работы (anti-duplication) |
 | Matrix Builder | `scripts/matrix_builder_v3.py` | Сборка матриц сравнения аналогов |
 
 ## Input Format
@@ -72,8 +73,10 @@
 7. Цены отличаются >10x (галлюцинация)
 8. Разные единицы измерения
 9. Рекомендация не соответствует цене
-10. Нет источников в матрице
-11. Неполная структура матрицы
+10. **Цена 2 дублирует Цену 1 (та же цена/URL/поставщик)**
+11. **URL Цены 2 = URL Цены 1 (один товар за два)**
+12. Нет источников в матрице
+13. Неполная структура матрицы
 
 ### WARN (предупреждения)
 1. Аналог дороже без объяснения
@@ -103,7 +106,15 @@ python3 scripts/runner_v3.py input.xlsx results.json output/
 python3 scripts/eval.py output/price_comparison_main_*.xlsx
 ```
 
-## Graceful Degradation
+## Поиск: приоритет Яндекс
+
+**Приоритетный движок:** Яндекс (yandex.ru), запросы на русском языке
+- Формат: `купить [артикул] [название] цена`
+- Fallback: DuckDuckGo / Bing
+
+**Правило анти-дублирования:**
+- Цена 2 НЕ может дублировать Цену 1
+- При невозможности найти Цену 2 — оставить "Не найдена за 10 мин"
 
 ```
 Позиция начата
