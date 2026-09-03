@@ -288,7 +288,7 @@ def create_main_sheet(wb, results):
     # Prepare analogs for sub-agent research
     analogs_to_research = []
     for item in results:
-        if item.get('analog_brand') and item.get('analog_price'):
+        if item.get('analog_brand'):
             analogs_to_research.append({
                 'type': 'other_brand',
                 'original': item['name'],
@@ -297,7 +297,7 @@ def create_main_sheet(wb, results):
                 'analog_price': item.get('analog_price'),
                 'row_num': item.get('num')
             })
-        if item.get('alt_brand') and item.get('alt_price'):
+        if item.get('alt_brand'):
             analogs_to_research.append({
                 'type': 'same_brand',
                 'original': item['name'],
@@ -388,16 +388,16 @@ def create_analog_matrices(wb, results):
                 row += 1
             else:
                 ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-                src_cell = ws.cell(row=row, column=1, value="Источник: не найден (аналогов не обнаружено после поиска)")
+                src_cell = ws.cell(row=row, column=1, value="Источник: не указан — уточните цену у поставщика (Human-in-the-loop)")
                 src_cell.fill = GRAY_FILL
-                src_cell.font = Font(name='Calibri', size=8, italic=True, color='999999')
+                src_cell.font = Font(name='Calibri', size=8, italic=True, color='996600')
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1
         else:
             # No analog found
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            msg_cell = ws.cell(row=row, column=1, value="Аналоги другой марки не найдены после 3 попыток поиска")
+            msg_cell = ws.cell(row=row, column=1, value="Аналоги другой марки не найдены")
             msg_cell.fill = GRAY_FILL
             msg_cell.font = Font(name='Calibri', size=10, italic=True, color='666666')
             msg_cell.alignment = CENTER_ALIGN
@@ -484,16 +484,16 @@ def create_analog_matrices(wb, results):
                 row += 1
             else:
                 ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-                src_cell = ws.cell(row=row, column=1, value="Источник: не найден (альтернатив не обнаружено после поиска)")
+                src_cell = ws.cell(row=row, column=1, value="Источник: не указан — уточните цену у поставщика (Human-in-the-loop)")
                 src_cell.fill = GRAY_FILL
-                src_cell.font = Font(name='Calibri', size=8, italic=True, color='999999')
+                src_cell.font = Font(name='Calibri', size=8, italic=True, color='996600')
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1
         else:
             # No alt found
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            msg_cell = ws.cell(row=row, column=1, value="Аналоги внутри марки не найдены после 3 попыток поиска")
+            msg_cell = ws.cell(row=row, column=1, value="Аналоги внутри марки не найдены")
             msg_cell.fill = GRAY_FILL
             msg_cell.font = Font(name='Calibri', size=10, italic=True, color='666666')
             msg_cell.alignment = CENTER_ALIGN
