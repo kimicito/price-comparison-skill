@@ -374,6 +374,30 @@ def eval_price_comparison(filepath, input_filepath=None):
                 if 'согласовать' in comment_lower and not any(word in comment_lower for word in ['лучше', 'премиум', 'надёжн', 'качеств', 'причина', 'дороже']):
                     errors.append(f"FAIL [{sku}]: Рекомендация 'Согласовать', но аналог дороже оригинала ({pa:,.0f} > {p1:,.0f}) без объяснения причины.")
 
+        # FAIL 10: Дублирование Цены1 в Цену2 (галлюцинация)
+        # Если Цена2 не найдена — нельзя копировать Цену1, URL1, supplier1 в поле Цены2
+        if has_price_1 and has_price_2:
+            p1 = extract_price(price_1)
+            p2 = extract_price(price_2)
+            # Если цены идентичны (или разница < 1%) — проверяем источники
+            if p1 and p2 and p1 > 0 and abs(p1 - p2) / p1 < 0.01:
+                # Сравниваем источники
+                if url_1 and url_2:
+                    dom1 = get_domain(url_1)
+                    dom2 = get_domain(url_2)
+                else:
+                    dom1 = str(supplier_1).strip().lower() if supplier_1 else ""
+                    dom2 = str(supplier_2).strip().lower() if supplier_2 else ""
+                
+                if dom1 and dom2 and dom1 == dom2:
+                    errors.append(f"FAIL [{sku}]: Цена 2 дублирует Цену 1 (идентичная цена {p1:,.0f} ₽ от того же источника {dom1}). Требуется реальная Цена 2 от другого поставщика или оставить 'Не найдена'.")
+        
+        # FAIL 11: Цена2 заполнена копией Цены1 при отсутствии второго поставщика
+        # Проверяем по совпадению URL или поставщика при наличии обеих цен
+        if has_price_1 and has_price_2 and url_1 and url_2:
+            if str(url_1).strip() == str(url_2).strip():
+                errors.append(f"FAIL [{sku}]: URL Цены 2 идентичен URL Цены 1 ({url_1}). Это один и тот же товар — требуется другой поставщик или 'Не найдена'.")
+
         # ==================== WARN CHECKS ====================
 
         # WARN 1: Цена аналога > оригинала → нужно объяснение

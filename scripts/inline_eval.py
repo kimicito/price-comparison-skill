@@ -103,6 +103,40 @@ def check_suppliers_different(supplier1, supplier2):
     return True, None
 
 
+def check_no_duplication(price1, url1, supplier1, price2, url2, supplier2):
+    """Проверка, что Цена2 не дублирует Цену1 (галлюцинация).
+    
+    Returns: (ok, error_msg)
+    """
+    if price2 is None or price1 is None:
+        return True, None
+    
+    # Если цены числовые и идентичны
+    if isinstance(price1, (int, float)) and isinstance(price2, (int, float)):
+        if price1 > 0 and abs(price1 - price2) / price1 < 0.01:
+            # Проверяем источники
+            dom1 = ""
+            dom2 = ""
+            if url1 and url2:
+                try:
+                    dom1 = urlparse(str(url1).strip()).netloc.lower().replace('www.', '')
+                    dom2 = urlparse(str(url2).strip()).netloc.lower().replace('www.', '')
+                except:
+                    pass
+            elif supplier1 and supplier2:
+                dom1 = str(supplier1).strip().lower()
+                dom2 = str(supplier2).strip().lower()
+            
+            if dom1 and dom2 and dom1 == dom2:
+                return False, f"Цена 2 дублирует Цену 1 ({price1:,.0f} ₽ от {dom1}). Требуется другой поставщик."
+    
+    # Проверка на идентичные URL
+    if url1 and url2 and str(url1).strip() == str(url2).strip():
+        return False, f"URL Цены 2 идентичен URL Цены 1 ({url1}). Один товар выдан за два."
+    
+    return True, None
+
+
 def inline_eval_item(item):
     """Полная inline-проверка одной позиции.
     
@@ -155,6 +189,14 @@ def inline_eval_item(item):
             errors.append(f"Поставщики: {msg}")
         else:
             warnings.append(f"Поставщики: {msg}")
+    
+    # Проверка на дублирование Цены1 в Цену2 (новое в v7.5)
+    ok, msg = check_no_duplication(
+        item.get('price1'), item.get('url1'), item.get('supplier1'),
+        item.get('price2'), item.get('url2'), item.get('supplier2')
+    )
+    if not ok:
+        errors.append(f"Дублирование: {msg}")
     
     return errors, warnings
 
