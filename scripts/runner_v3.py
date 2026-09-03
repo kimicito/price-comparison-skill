@@ -316,7 +316,7 @@ def create_analog_matrices(wb, results):
     # --- Analogs: Other Brand ---
     other_brand_analogs = []
     for item in results:
-        if item.get('analog_brand') and item.get('analog_price'):
+        if item.get('analog_brand'):
             other_brand_analogs.append(item)
     
     if other_brand_analogs:
@@ -345,9 +345,21 @@ def create_analog_matrices(wb, results):
                 cell.border = THIN_BORDER
             row += 1
             
+            # Price row: handle null analog_price
+            if item.get('analog_price'):
+                price_analog = f"{item['analog_price']} ₽"
+                if item.get('price1') and item['price1'] > 0:
+                    savings = int((1 - item['analog_price']/item['price1'])*100)
+                    influence = f"Экономия {savings}%"
+                else:
+                    influence = "Экономия: н/д (нет цены оригинала)"
+            else:
+                price_analog = "По запросу"
+                influence = "Цену уточняйте у поставщика"
+            
             # Data rows (demo data)
             data_rows = [
-                ['Цена', f"{item.get('price1', '—')} ₽", f"{item['analog_price']} ₽", '—', f"Экономия {int((1 - item['analog_price']/item['price1'])*100)}%"],
+                ['Цена', f"{item.get('price1', '—')} ₽", price_analog, '—', influence],
                 ['Марка', item['name'].split()[0], item['analog_brand'].split()[0], 'Другая марка', 'Совместимость по спецификации'],
                 ['Скорость', 'По спецификации', 'По спецификации', '✅ Совпадает', '—'],
                 ['Стандарт', 'IEEE 802.3', 'IEEE 802.3', '✅ Совпадает', '—'],
@@ -371,6 +383,14 @@ def create_analog_matrices(wb, results):
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1
+            else:
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+                src_cell = ws.cell(row=row, column=1, value="Источник: не найден (аналогов не обнаружено после поиска)")
+                src_cell.fill = GRAY_FILL
+                src_cell.font = Font(name='Calibri', size=8, italic=True, color='999999')
+                for c in range(1, 6):
+                    ws.cell(row=row, column=c).border = THIN_BORDER
+                row += 1
             
             row += 1  # Empty row between sections
         
@@ -384,7 +404,7 @@ def create_analog_matrices(wb, results):
     # --- Analogs: Same Brand ---
     same_brand_analogs = []
     for item in results:
-        if item.get('alt_brand') and item.get('alt_price'):
+        if item.get('alt_brand'):
             same_brand_analogs.append(item)
     
     if same_brand_analogs:
@@ -413,9 +433,21 @@ def create_analog_matrices(wb, results):
                 cell.border = THIN_BORDER
             row += 1
             
+            # Price row: handle null alt_price
+            if item.get('alt_price'):
+                price_alt = f"{item['alt_price']} ₽"
+                if item.get('price1') and item['price1'] > 0:
+                    diff = int((item['alt_price']/item['price1']-1)*100)
+                    influence = f"Разница {diff}%"
+                else:
+                    influence = "Разница: н/д (нет цены оригинала)"
+            else:
+                price_alt = "По запросу"
+                influence = "Цену уточняйте у поставщика"
+            
             # Data rows
             data_rows = [
-                ['Цена', f"{item.get('price1', '—')} ₽", f"{item['alt_price']} ₽", '—', f"Разница {int((item['alt_price']/item['price1']-1)*100)}%"],
+                ['Цена', f"{item.get('price1', '—')} ₽", price_alt, '—', influence],
                 ['Модель', item['name'].split()[1] if len(item['name'].split()) > 1 else '—', item['alt_brand'].split()[0], 'Другая модель', 'Та же марка, другая модель'],
             ]
             
@@ -434,6 +466,14 @@ def create_analog_matrices(wb, results):
                 src_cell.fill = GRAY_FILL
                 src_cell.font = Font(name='Calibri', size=8, color='0563C1', underline='single')
                 src_cell.hyperlink = item['alt_url']
+                for c in range(1, 6):
+                    ws.cell(row=row, column=c).border = THIN_BORDER
+                row += 1
+            else:
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+                src_cell = ws.cell(row=row, column=1, value="Источник: не найден (альтернатив не обнаружено после поиска)")
+                src_cell.fill = GRAY_FILL
+                src_cell.font = Font(name='Calibri', size=8, italic=True, color='999999')
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1

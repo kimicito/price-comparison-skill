@@ -160,12 +160,31 @@ def inline_eval_item(item):
     
     # Проверка аналога
     analog_price = item.get('analog_price')
-    if analog_price:
-        ok, msg = check_price_sanity(analog_price, item.get('price1'))
-        if not ok:
-            errors.append(f"analog_price: {msg}")
-        elif msg:
-            warnings.append(f"analog_price: {msg}")
+    analog_brand = item.get('analog_brand')
+    
+    if analog_brand:
+        if analog_price is not None:
+            ok, msg = check_price_sanity(analog_price, item.get('price1'))
+            if not ok:
+                errors.append(f"analog_price: {msg}")
+            elif msg:
+                warnings.append(f"analog_price: {msg}")
+        else:
+            warnings.append("analog_price: Цена аналога не указана (по запросу) — вкладка аналогов создаётся без цены")
+    
+    # Проверка альтернативы (той же марки)
+    alt_brand = item.get('alt_brand')
+    alt_price = item.get('alt_price')
+    
+    if alt_brand:
+        if alt_price is not None:
+            ok, msg = check_price_sanity(alt_price, item.get('price1'))
+            if not ok:
+                errors.append(f"alt_price: {msg}")
+            elif msg:
+                warnings.append(f"alt_price: {msg}")
+        else:
+            warnings.append("alt_price: Цена альтернативы не указана (по запросу) — вкладка аналогов создаётся без цены")
     
     # Проверка URL
     for field in ['url1', 'url2', 'analog_url']:

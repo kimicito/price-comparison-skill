@@ -288,12 +288,13 @@ def eval_price_comparison(filepath, input_filepath=None):
         # "Цена не указана" - это нормально, если есть URL
         price_1_is_special = str(price_1).strip() in ["Цена не указана", "Не найдена", "-"] if price_1 else False
         price_2_is_special = str(price_2).strip() in ["Цена не указана", "Не найдена", "-"] if price_2 else False
+        analog_price_is_special = str(analog_price).strip() in ["Цена не указана", "Не найдена", "-", "По запросу"] if analog_price is not None else True  # null = по запросу
 
         if has_price_1 and not price_1_is_numeric and not price_1_is_special:
             errors.append(f"FAIL [{sku}]: Цена 1 не является числом ({price_1}). Должна быть числовая ячейка или 'Цена не указана'.")
         if has_price_2 and not price_2_is_numeric and not price_2_is_special:
             errors.append(f"FAIL [{sku}]: Цена 2 не является числом ({price_2}). Должна быть числовая ячейка или 'Цена не указана'.")
-        if has_analog and analog_price is not None and str(analog_price).strip() != "" and str(analog_price).strip() != "-" and not analog_price_is_numeric:
+        if has_analog and analog_price is not None and str(analog_price).strip() not in ["", "-"] and not analog_price_is_numeric and not analog_price_is_special:
             errors.append(f"FAIL [{sku}]: Цена аналога не является числом ({analog_price}).")
 
         # FAIL 4: URL ведут на конкретный товар, а не на поиск/главную/404
@@ -444,11 +445,14 @@ def eval_price_comparison(filepath, input_filepath=None):
             if p1 and p1 > 10_000_000:
                 warnings.append(f"WARN [{sku}]: Подозрительно высокая цена ({p1:,.0f} ₽). Проверьте единицу измерения.")
 
-        # WARN 6: Есть аналог, но нет URL аналога
-        if has_analog and analog_price is not None:
+        # WARN 6: Есть аналог, но нет URL аналога (URL нужен всегда, особенно при "по запросу")
+        if has_analog:
             check_analog_url = analog_url if analog_url else (analog_supplier if analog_supplier and str(analog_supplier).strip().startswith('http') else None)
             if not is_clickable_url(check_analog_url):
-                warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({check_analog_url}).")
+                if analog_price is None or str(analog_price).strip() in ["", "-", "По запросу"]:
+                    warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({check_analog_url}). При цене 'по запросу' URL обязателен для связи с поставщиком.")
+                else:
+                    warnings.append(f"WARN [{sku}]: У аналога нет кликабельного URL ({check_analog_url}).")
             else:
                 # Проверим, что URL аналога - на конкретный товар
                 analog_check = is_product_page_url(check_analog_url, analog)

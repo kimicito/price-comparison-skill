@@ -1,1 +1,15 @@
+# Input/output files
+input.xlsx
+output/
+results.json
+run_tmp.py
+run.sh
+
+# Python
 __pycache__/
+*.pyc
+.venv/
+
+# Temporary
+*.tmp
+*.log
