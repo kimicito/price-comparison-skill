@@ -311,30 +311,33 @@ def create_main_sheet(wb, results):
 
 
 def create_analog_matrices(wb, results):
-    """Create analog comparison matrices as separate sheets."""
+    """Create analog comparison matrices as separate sheets.
+    
+    Sheets are created for ALL items. If analog not found — show 'not found' message.
+    """
     
     # --- Analogs: Other Brand ---
-    other_brand_analogs = []
-    for item in results:
-        if item.get('analog_brand'):
-            other_brand_analogs.append(item)
+    ws = wb.create_sheet(title='Аналоги другой марки')
+    row = 1
     
-    if other_brand_analogs:
-        ws = wb.create_sheet(title='Аналоги другой марки')
-        row = 1
+    for item in results:
+        has_analog = bool(item.get('analog_brand'))
         
-        for item in other_brand_analogs:
-            # Section title
+        # Section title
+        if has_analog:
             title = f"№{item['num']}: {item['name'][:40]} → {item['analog_brand']}"
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            title_cell = ws.cell(row=row, column=1, value=title)
-            title_cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-            title_cell.font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-            title_cell.alignment = CENTER_ALIGN
-            for c in range(1, 6):
-                ws.cell(row=row, column=c).border = THIN_BORDER
-            row += 1
-            
+        else:
+            title = f"№{item['num']}: {item['name'][:40]} → Аналоги не найдены"
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        title_cell = ws.cell(row=row, column=1, value=title)
+        title_cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        title_cell.font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+        title_cell.alignment = CENTER_ALIGN
+        for c in range(1, 6):
+            ws.cell(row=row, column=c).border = THIN_BORDER
+        row += 1
+        
+        if has_analog:
             # Headers
             headers = ['Параметр', 'Оригинал', 'Аналог', 'Отклонение', 'Влияние']
             for col_num, header in enumerate(headers, 1):
@@ -357,7 +360,7 @@ def create_analog_matrices(wb, results):
                 price_analog = "По запросу"
                 influence = "Цену уточняйте у поставщика"
             
-            # Data rows (demo data)
+            # Data rows
             data_rows = [
                 ['Цена', f"{item.get('price1', '—')} ₽", price_analog, '—', influence],
                 ['Марка', item['name'].split()[0], item['analog_brand'].split()[0], 'Другая марка', 'Совместимость по спецификации'],
@@ -391,38 +394,48 @@ def create_analog_matrices(wb, results):
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1
-            
-            row += 1  # Empty row between sections
-        
-        # Column widths
-        ws.column_dimensions['A'].width = 16
-        ws.column_dimensions['B'].width = 20
-        ws.column_dimensions['C'].width = 20
-        ws.column_dimensions['D'].width = 18
-        ws.column_dimensions['E'].width = 30
-    
-    # --- Analogs: Same Brand ---
-    same_brand_analogs = []
-    for item in results:
-        if item.get('alt_brand'):
-            same_brand_analogs.append(item)
-    
-    if same_brand_analogs:
-        ws = wb.create_sheet(title='Аналоги той же марки')
-        row = 1
-        
-        for item in same_brand_analogs:
-            # Section title
-            title = f"№{item['num']}: {item['name'][:40]} → {item['alt_brand']}"
+        else:
+            # No analog found
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            title_cell = ws.cell(row=row, column=1, value=title)
-            title_cell.fill = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')
-            title_cell.font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-            title_cell.alignment = CENTER_ALIGN
+            msg_cell = ws.cell(row=row, column=1, value="Аналоги другой марки не найдены после 3 попыток поиска")
+            msg_cell.fill = GRAY_FILL
+            msg_cell.font = Font(name='Calibri', size=10, italic=True, color='666666')
+            msg_cell.alignment = CENTER_ALIGN
             for c in range(1, 6):
                 ws.cell(row=row, column=c).border = THIN_BORDER
             row += 1
-            
+        
+        row += 1  # Empty row between sections
+    
+    # Column widths
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 30
+    
+    # --- Analogs: Same Brand ---
+    ws = wb.create_sheet(title='Аналоги той же марки')
+    row = 1
+    
+    for item in results:
+        has_alt = bool(item.get('alt_brand'))
+        
+        # Section title
+        if has_alt:
+            title = f"№{item['num']}: {item['name'][:40]} → {item['alt_brand']}"
+        else:
+            title = f"№{item['num']}: {item['name'][:40]} → Альтернативы не найдены"
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        title_cell = ws.cell(row=row, column=1, value=title)
+        title_cell.fill = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')
+        title_cell.font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+        title_cell.alignment = CENTER_ALIGN
+        for c in range(1, 6):
+            ws.cell(row=row, column=c).border = THIN_BORDER
+        row += 1
+        
+        if has_alt:
             # Headers
             headers = ['Параметр', 'Оригинал', 'Альтернатива', 'Отклонение', 'Влияние']
             for col_num, header in enumerate(headers, 1):
@@ -477,15 +490,25 @@ def create_analog_matrices(wb, results):
                 for c in range(1, 6):
                     ws.cell(row=row, column=c).border = THIN_BORDER
                 row += 1
-            
+        else:
+            # No alt found
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            msg_cell = ws.cell(row=row, column=1, value="Аналоги внутри марки не найдены после 3 попыток поиска")
+            msg_cell.fill = GRAY_FILL
+            msg_cell.font = Font(name='Calibri', size=10, italic=True, color='666666')
+            msg_cell.alignment = CENTER_ALIGN
+            for c in range(1, 6):
+                ws.cell(row=row, column=c).border = THIN_BORDER
             row += 1
         
-        # Column widths
-        ws.column_dimensions['A'].width = 16
-        ws.column_dimensions['B'].width = 20
-        ws.column_dimensions['C'].width = 20
-        ws.column_dimensions['D'].width = 18
-        ws.column_dimensions['E'].width = 30
+        row += 1  # Empty row between sections
+    
+    # Column widths
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 30
 
 
 def main():
