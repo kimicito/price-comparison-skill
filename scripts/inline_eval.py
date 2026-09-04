@@ -2,12 +2,64 @@
 Inline Eval — проверки во время работы (не пост-фактум).
 
 Использование:
-    from inline_eval import check_price_sanity, check_analog_brand, check_url_valid
+    from inline_eval import check_price_sanity, check_analog_brand, check_url_valid, check_url_alive
     
     errors, warnings = inline_eval_item(item)
 """
 
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+
+def check_url_alive(url, timeout=2):
+    """Проверяет, что URL возвращает не 404 (HEAD-запрос).
+    
+    Args:
+        url: проверяемый URL
+        timeout: таймаут в секундах
+    
+    Returns: (ok, level, msg)
+        ok: bool — URL живой
+        level: 'FAIL' | 'WARN' — уровень проблемы
+        msg: str — описание
+    """
+    if not url:
+        return True, None, None
+    
+    url = str(url).strip()
+    if not (url.startswith('http://') or url.startswith('https://')):
+        return True, None, None  # Не URL — пропускаем
+    
+    try:
+        req = Request(url, method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
+        response = urlopen(req, timeout=timeout)
+        status = response.getcode()
+        
+        if status == 200:
+            return True, None, None
+        elif status in (301, 302, 307, 308):
+            return True, None, None  # Редирект — нормально
+        elif status == 404:
+            return False, 'FAIL', f"URL возвращает 404 (Not Found): {url}"
+        elif status == 403:
+            return False, 'WARN', f"URL возвращает 403 (Forbidden) — возможно, защита от ботов: {url}"
+        elif status == 500:
+            return False, 'WARN', f"URL возвращает 500 (Server Error): {url}"
+        else:
+            return True, None, None  # Другие статусы — предупреждение не нужно
+            
+    except HTTPError as e:
+        if e.code == 404:
+            return False, 'FAIL', f"URL возвращает 404 (Not Found): {url}"
+        elif e.code == 403:
+            return False, 'WARN', f"URL возвращает 403 (Forbidden): {url}"
+        else:
+            return False, 'WARN', f"URL ошибка HTTP {e.code}: {url}"
+    except URLError as e:
+        return False, 'WARN', f"URL недоступен ({e.reason}): {url}"
+    except Exception as e:
+        return False, 'WARN', f"URL проверка не удалась ({e}): {url}"
 
 
 def check_price_sanity(price, reference_price=None, max_deviation=10.0):
@@ -186,12 +238,23 @@ def inline_eval_item(item):
         else:
             warnings.append("alt_price: Цена альтернативы не указана (по запросу) — вкладка аналогов создаётся без цены")
     
-    # Проверка URL
+    # Проверка URL (формат)
     for field in ['url1', 'url2', 'analog_url']:
         url = item.get(field)
         ok, msg = check_url_valid(url)
         if not ok:
             errors.append(f"{field}: {msg}")
+    
+    # Проверка URL (404 / доступность) — опционально, с таймаутом
+    for field in ['url1', 'url2', 'analog_url']:
+        url = item.get(field)
+        if url and str(url).startswith('http'):
+            ok, level, msg = check_url_alive(url)
+            if not ok and msg:
+                if level == 'FAIL':
+                    errors.append(f"{field}: {msg}")
+                else:
+                    warnings.append(f"{field}: {msg}")
     
     # Проверка бренда аналога
     ok, msg, is_same = check_analog_brand(item.get('name'), item.get('analog'))
