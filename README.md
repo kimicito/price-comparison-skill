@@ -1,7 +1,7 @@
-# Price Comparison Skill v7.4
+# Price Comparison Skill v7.7
 
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-Skill-blue)](https://openclaw.ai)
-[![Version](https://img.shields.io/badge/version-7.4-green)](SKILL.md)
+[![Version](https://img.shields.io/badge/version-7.7-green)](SKILL.md)
 
 Skill для поиска и сравнения цен на материалы и оборудование. Работает с Excel-таблицами, ищет по B2B-каталогам и маркетплейсам, записывает 2 цены + аналоги.
 
@@ -29,7 +29,7 @@ Skill для поиска и сравнения цен на материалы �
 | **Аналог др. марки** | Другой бренд | 5 мин | «—» (прочерк) |
 | **Аналог той же марки** | Тот же бренд | 10 мин | «—» (прочерк) |
 
-## Возможности v7.4
+## Возможности v7.7
 
 - ✅ **Кликабельные цены** — каждая цена = гиперссылка на товар
 - ✅ **25 проверок eval** — 11 FAIL + 14 WARN
@@ -82,7 +82,7 @@ price-comparison-skill/
 
 ## Версии
 
-- **v7.4** — URL validation + fallback prices + matrix sheets
+- **v7.7** — URL validation + fallback prices + matrix sheets
 - **v7.3** — Anti-hallucination eval checks
 - **v7.0** — Formula 2+1+1 + Clickable Links + Full Design
 - **v6.0** — Tests, retry/fallback, cache v2 (в архиве)
